@@ -57,6 +57,8 @@ def run_case(case_id, problem=None, approve=None, verbose=False):
 
     transcript = []      # what the model would see
     evidence = []        # every tool actually called, in order
+    # Step 1: Keep a separate execution log for each case.
+    tool_trace = []
 
     # TURNS ARE TOOL-CALLING TURNS. The concluding move - where the agent
     # writes its decision record - is bookkeeping, not a turn. This is the
@@ -116,12 +118,62 @@ def run_case(case_id, problem=None, approve=None, verbose=False):
                             "%s awaits human approval (autonomy=%s)"
                             % (name, config.AUTONOMY))
 
-                result = tools.call(problem, name, args)
+                # Step 2: Record calls only after the pre-execution guards pass.
+                # Blocked attempts remain in guardrails_fired, not tool_trace.
+                trace_entry = {
+                    "turn": turns,
+                    "tool": name,
+                    "args": args,
+                    "observation": None,
+                    "seconds": None,
+                    "error": None,
+                }
+                # Step 3: Measure tool execution time with a monotonic clock.
+                call_started = time.perf_counter()
+                try:
+                    # Step 4: Save the actual result, including valid empty results.
+                    result = tools.call(problem, name, args)
+                    trace_entry["observation"] = result
+                except GuardrailStop as stop:
+                    # Step 5: Preserve the existing outer guardrail handler.
+                    trace_entry["error"] = {
+                        "type": type(stop).__name__,
+                        "message": stop.detail,
+                    }
+                    raise
+                except Exception as exc:
+                    # Step 6: Stop this case explicitly when a tool fails.
+                    # Do not continue to a booking after an incomplete lookup.
+                    trace_entry["error"] = {
+                        "type": type(exc).__name__,
+                        "message": str(exc),
+                    }
+                    stopped_by = "tool_error"
+                    record = {
+                        "decision": "escalate",
+                        "reason": (
+                            f"tool {name} failed: "
+                            f"{type(exc).__name__}: {exc}"
+                        ),
+                    }
+                    break
+                finally:
+                    # Step 7: Save timing and trace even when execution fails.
+                    trace_entry["seconds"] = round(
+                        time.perf_counter() - call_started, 6
+                    )
+                    tool_trace.append(trace_entry)
+
                 evidence.append(name)
                 observations.append({"tool": name, "args": args,
                                      "observation": result})
                 if verbose:
                     print("       %-26s -> %s" % (name, _short(result)))
+
+            # Step 8: Also exit the outer loop after a tool error.
+            # The break above exits only the inner tool-call loop.
+            if stopped_by == "tool_error":
+                break
 
             transcript.append({"role": "assistant",
                                "content": move.get("thought", "")})
@@ -141,6 +193,8 @@ def run_case(case_id, problem=None, approve=None, verbose=False):
     record.update({
         "case_id": case_id,
         "evidence": evidence,
+        # Step 9: Expose the execution log to the evaluator and result output.
+        "tool_trace": tool_trace,
         "turns": turns,
         "tokens_in": tokens_in,
         "tokens_out": tokens_out,

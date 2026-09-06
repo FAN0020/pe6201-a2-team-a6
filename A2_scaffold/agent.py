@@ -207,6 +207,13 @@ def run_case(case_id, problem=None, approve=None, verbose=False,
         "guardrails_fired": guards.fired,
         "stopped_by": stopped_by,
         "backend": backend.name,
+        # Preserve each live response's API-reported token counts for audit.
+        "model_usage": getattr(backend, "usage_trace", []),
+        # Make the token source explicit so estimates are never reported as
+        # measurements in the evaluation or cost analysis.
+        "token_measurement": (
+            "api_reported" if backend.name == "live" else "scripted_estimate"
+        ),
         # Only scripted runs have a controlled grouping mode in this experiment.
         "execution_mode": (
             backend.execution_mode if backend.name == "scripted" else None

@@ -242,19 +242,53 @@ class LiveBackend:
         self.case_id = case_id
         self.tools = tool_descriptors
         self.system_prompt = system_prompt
+        # Step 1: Keep the latest API-reported usage for the agent loop.
+        self.last_usage = {"prompt_tokens": 0, "completion_tokens": 0,
+                           "total_tokens": 0}
+        # Step 2: Preserve per-response usage for later cost auditing.
+        self.usage_trace = []
 
     def next_move(self, transcript):
-        messages = [{"role": "system", "content": self.system_prompt}]
+        # Step 3: Give the live model the case identifier on every stateless
+        # request. The system prompt describes the task but not the case.
+        messages = [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user",
+             "content": "Process case_id %s using the available tools."
+                        % self.case_id},
+        ]
         for entry in transcript:
             messages.append({"role": entry["role"], "content": entry["content"]})
-        raw = _live_call(messages)
+        payload = _live_call(messages)
+
+        # Step 4: Require measured usage instead of silently recording zeros.
+        usage = payload.get("usage") or {}
+        if "prompt_tokens" not in usage or "completion_tokens" not in usage:
+            raise ValueError("live API response did not include token usage")
+        self.last_usage = {
+            "prompt_tokens": int(usage["prompt_tokens"]),
+            "completion_tokens": int(usage["completion_tokens"]),
+            "total_tokens": int(usage.get(
+                "total_tokens",
+                usage["prompt_tokens"] + usage["completion_tokens"])),
+        }
+        self.usage_trace.append(dict(self.last_usage))
+
+        # Step 5: Parse only the assistant content after usage is recorded.
+        try:
+            raw = payload["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise ValueError("live API response did not include assistant content") from exc
         return _parse_move(raw)
 
-    @staticmethod
-    def token_estimate(transcript):
-        # Replace with the usage numbers the API returns. Estimating here
-        # and calling it measured is the mistake D6 punishes.
-        return 0, 0
+    def token_estimate(self, transcript):
+        """Return measured usage from the most recent live API response.
+
+        The method name is retained because the agent loop also uses it for
+        scripted estimates. In live mode these values come from the API.
+        """
+        return (self.last_usage["prompt_tokens"],
+                self.last_usage["completion_tokens"])
 
 
 def _parse_move(text):
@@ -292,7 +326,8 @@ def _live_call(messages):
                  "Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=60) as r:
         payload = json.load(r)
-    return payload["choices"][0]["message"]["content"]
+    # Return the whole response so LiveBackend can retain measured usage.
+    return payload
 
 
 def make_backend(case_id, tool_descriptors=None, system_prompt="",

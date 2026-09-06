@@ -32,7 +32,8 @@ from backends import make_backend
 from guardrails import Guardrails, GuardrailStop
 
 
-def run_case(case_id, problem=None, approve=None, verbose=False):
+def run_case(case_id, problem=None, approve=None, verbose=False,
+             execution_mode="grouped"):
     """Run ONE case from a clean state and return the decision record.
 
     ISOLATION (D4): everything this function needs is created inside it.
@@ -49,11 +50,14 @@ def run_case(case_id, problem=None, approve=None, verbose=False):
     # backend this IS the experiment D2(b) measures: the descriptors and
     # the routing rules, assembled by prompt.build_system_prompt().
     #     python3 run_eval.py --prompt      to see the exact text
+    # Pass the requested scripted mode through the backend factory.
+    # The trailing optional parameter keeps existing run_case calls valid.
     backend = make_backend(
         case_id,
         tool_descriptors=[tools.DESCRIPTORS[n] for n in tools.REGISTRY[problem]
                           if n in tools.DESCRIPTORS],
-        system_prompt=prompt.build_system_prompt(problem))
+        system_prompt=prompt.build_system_prompt(problem),
+        execution_mode=execution_mode)
 
     transcript = []      # what the model would see
     evidence = []        # every tool actually called, in order
@@ -203,6 +207,10 @@ def run_case(case_id, problem=None, approve=None, verbose=False):
         "guardrails_fired": guards.fired,
         "stopped_by": stopped_by,
         "backend": backend.name,
+        # Only scripted runs have a controlled grouping mode in this experiment.
+        "execution_mode": (
+            backend.execution_mode if backend.name == "scripted" else None
+        ),
     })
     return record
 

@@ -1,0 +1,164 @@
+{
+  "decision": "book",
+  "booked": {
+    "clinic": "OPH-C2",
+    "date": "2026-10-14",
+    "time": "11:20"
+  },
+  "reason": "Urgency band routine, so an 8-week window from as_of 2026-09-09 closing 2026-11-04; booked at 5 weeks. VF-01 present. No existing OPH appointment for P-1180. OPH-C2 was full until 2026-10-14.",
+  "case_id": "REF-5602",
+  "evidence": [
+    "get_referral",
+    "check_referral_criteria",
+    "lookup_patient",
+    "get_clinic_slots",
+    "get_clinic_slots",
+    "book_slot"
+  ],
+  "tool_trace": [
+    {
+      "turn": 1,
+      "tool": "get_referral",
+      "args": {
+        "referral_id": "REF-5602"
+      },
+      "observation": {
+        "referral_id": "REF-5602",
+        "patient_id": "P-1180",
+        "referring_clinic": "Clementi Medical",
+        "specialty": "OPH",
+        "date_received": "2026-09-09",
+        "clinical_summary": "Gradual blurring of vision over the past year, worse for reading. Suspected cataract. Symptoms are gradual and painless.",
+        "tests_attached": [
+          "VF-01"
+        ],
+        "tests_attached_on": "2026-08-28"
+      },
+      "seconds": 1e-06,
+      "error": null
+    },
+    {
+      "turn": 2,
+      "tool": "check_referral_criteria",
+      "args": {
+        "specialty": "OPH",
+        "referral_id": "REF-5602"
+      },
+      "observation": {
+        "red_flag_term": null,
+        "right_department": true,
+        "missing_tests": [],
+        "band": "routine",
+        "window_weeks": 8
+      },
+      "seconds": 1.3e-05,
+      "error": null
+    },
+    {
+      "turn": 3,
+      "tool": "lookup_patient",
+      "args": {
+        "patient_id": "P-1180"
+      },
+      "observation": {
+        "patient": {
+          "patient_id": "P-1180",
+          "date_of_birth": "1968-03-14",
+          "existing_appointments": []
+        },
+        "contact": {
+          "patient_id": "P-1180",
+          "method": "sms",
+          "value": "+65 8••• ••21"
+        }
+      },
+      "seconds": 1e-06,
+      "error": null
+    },
+    {
+      "turn": 4,
+      "tool": "get_clinic_slots",
+      "args": {
+        "specialty": "OPH",
+        "band": "routine",
+        "from": "2026-09-09",
+        "to": "2026-09-30"
+      },
+      "observation": [],
+      "seconds": 2e-06,
+      "error": null
+    },
+    {
+      "turn": 5,
+      "tool": "get_clinic_slots",
+      "args": {
+        "specialty": "OPH",
+        "band": "routine",
+        "from": "2026-10-01",
+        "to": "2026-11-04"
+      },
+      "observation": [
+        {
+          "clinic": "OPH-C2",
+          "specialty": "OPH",
+          "band": "routine",
+          "date": "2026-10-14",
+          "time": "11:20",
+          "capacity_remaining": 2
+        },
+        {
+          "clinic": "OPH-C2",
+          "specialty": "OPH",
+          "band": "routine",
+          "date": "2026-10-14",
+          "time": "14:00",
+          "capacity_remaining": 1
+        },
+        {
+          "clinic": "OPH-C2",
+          "specialty": "OPH",
+          "band": "routine",
+          "date": "2026-10-28",
+          "time": "09:00",
+          "capacity_remaining": 3
+        }
+      ],
+      "seconds": 2e-06,
+      "error": null
+    },
+    {
+      "turn": 6,
+      "tool": "book_slot",
+      "args": {
+        "clinic": "OPH-C2",
+        "date": "2026-10-14",
+        "time": "11:20",
+        "referral_id": "REF-5602"
+      },
+      "observation": {
+        "booked": true,
+        "clinic": "OPH-C2",
+        "date": "2026-10-14",
+        "time": "11:20",
+        "referral_id": "REF-5602"
+      },
+      "seconds": 1e-06,
+      "error": null
+    }
+  ],
+  "turns": 6,
+  "tokens_in": 37800,
+  "tokens_out": 840,
+  "cost_usd": 0.004116,
+  "seconds": 0.0,
+  "guardrails_fired": [
+    {
+      "guardrail": "gate_passed",
+      "detail": "book_slot (autonomy=confirm)"
+    }
+  ],
+  "stopped_by": null,
+  "backend": "scripted",
+  "execution_mode": "sequential",
+  "measurement_type": "scripted_estimate"
+}

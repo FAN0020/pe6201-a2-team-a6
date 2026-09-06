@@ -27,6 +27,7 @@ moves is how you test the parts you wrote.
 """
 import json
 import urllib.request
+from copy import deepcopy
 
 import config
 
@@ -135,12 +136,64 @@ SCRIPTS = {
 }
 
 
+def build_script_steps(case_id, execution_mode="grouped"):
+    """Build an independent action sequence for one scripted run."""
+
+    # Step 1: Reject unsupported modes instead of silently guessing.
+    if execution_mode not in ("grouped", "sequential"):
+        raise ValueError(
+            "execution_mode must be 'grouped' or 'sequential'"
+        )
+
+    # Step 2: Copy nested arguments too, keeping the source script unchanged.
+    steps = deepcopy(SCRIPTS[case_id])
+
+    # Step 3: Preserve the original grouping for the default mode.
+    if execution_mode == "grouped":
+        return steps
+
+    sequential_steps = []
+    for step in steps:
+        # Step 4: Keep the final answer separate from tool-calling actions.
+        if "final" in step:
+            sequential_steps.append(step)
+            continue
+
+        # Step 5: Accept both action formats supported by the agent loop.
+        calls = step.get("calls")
+        if calls is None:
+            calls = [(step["tool"], step["args"])]
+
+        # Step 6: Fail explicitly if an action contains no tool calls.
+        if not calls:
+            raise ValueError("A scripted action must contain a tool call")
+
+        # Step 7: Leave existing single-call actions unchanged.
+        if len(calls) == 1:
+            sequential_steps.append(step)
+            continue
+
+        # Step 8: Split groups while preserving call order and arguments.
+        # Neutral replay text avoids claiming that calls still run together.
+        for name, args in calls:
+            sequential_steps.append({
+                "thought": (
+                    f"Sequential replay: execute {name} "
+                    "as a separate tool-calling turn."
+                ),
+                "calls": [(name, args)],
+            })
+
+    # Step 9: Return the derived sequence; SCRIPTS remains the shared source.
+    return sequential_steps
+
+
 class ScriptedBackend:
     """Replays SCRIPTS[case_id]. Deterministic, free, offline."""
 
     name = "scripted"
 
-    def __init__(self, case_id):
+    def __init__(self, case_id, execution_mode="grouped"):
         if case_id not in SCRIPTS:
             raise SystemExit(
                 "\n  No script for case %r.\n"
@@ -150,7 +203,11 @@ class ScriptedBackend:
                 "    2. set BACKEND = \"live\" in config.py (this costs money).\n"
                 "  Scripted cases so far: %s\n"
                 % (case_id, case_id, ", ".join(sorted(SCRIPTS))))
-        self.steps = SCRIPTS[case_id]
+        # Step 10: Store the mode and prepare this run's private sequence.
+        # Defaulting to grouped preserves existing constructor calls.
+        self.execution_mode = execution_mode
+        self.steps = build_script_steps(case_id, execution_mode)
+        # Start replaying at the first action in the selected sequence.
         self.i = 0
 
     def next_move(self, transcript):
@@ -238,10 +295,19 @@ def _live_call(messages):
     return payload["choices"][0]["message"]["content"]
 
 
-def make_backend(case_id, tool_descriptors=None, system_prompt=""):
+def make_backend(case_id, tool_descriptors=None, system_prompt="",
+                 execution_mode="grouped"):
+    # Validate the mode before constructing a backend.
+    if execution_mode not in ("grouped", "sequential"):
+        raise ValueError("execution_mode must be 'grouped' or 'sequential'")
     if config.BACKEND == "scripted":
-        return ScriptedBackend(case_id)
+        # Forward the mode to the scripted action-sequence builder.
+        return ScriptedBackend(case_id, execution_mode=execution_mode)
     if config.BACKEND == "live":
+        # Splitting live model moves is not implemented by this experiment.
+        # Reject this request rather than falsely reporting a sequential run.
+        if execution_mode == "sequential":
+            raise ValueError("sequential mode is supported only by the scripted backend")
         return LiveBackend(case_id, tool_descriptors or [], system_prompt)
     raise SystemExit("BACKEND must be 'scripted' or 'live', not %r"
                      % config.BACKEND)

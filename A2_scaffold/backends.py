@@ -26,10 +26,29 @@ moves is how you test the parts you wrote.
 ====================================================================
 """
 import json
+import urllib.error
 import urllib.request
 from copy import deepcopy
 
 import config
+
+
+class LiveBackendError(RuntimeError):
+    """Base error carrying a stable stopped_by value for live runs."""
+
+    reason = "backend_error"
+
+
+class LiveAPIError(LiveBackendError):
+    """The live provider could not return a usable HTTP response."""
+
+    reason = "api_error"
+
+
+class LiveResponseError(LiveBackendError):
+    """The provider responded, but its payload or model move was invalid."""
+
+    reason = "response_error"
 
 
 # =====================================================================
@@ -262,15 +281,24 @@ class LiveBackend:
         payload = _live_call(messages)
 
         # Step 4: Require measured usage instead of silently recording zeros.
+        if not isinstance(payload, dict):
+            raise LiveResponseError("live API response was not a JSON object")
         usage = payload.get("usage") or {}
         if "prompt_tokens" not in usage or "completion_tokens" not in usage:
-            raise ValueError("live API response did not include token usage")
+            raise LiveResponseError("live API response did not include token usage")
+        try:
+            prompt_tokens = int(usage["prompt_tokens"])
+            completion_tokens = int(usage["completion_tokens"])
+            total_tokens = int(usage.get(
+                "total_tokens", prompt_tokens + completion_tokens))
+        except (TypeError, ValueError) as exc:
+            raise LiveResponseError("live API token usage was not numeric") from exc
+        if min(prompt_tokens, completion_tokens, total_tokens) < 0:
+            raise LiveResponseError("live API token usage contained a negative value")
         self.last_usage = {
-            "prompt_tokens": int(usage["prompt_tokens"]),
-            "completion_tokens": int(usage["completion_tokens"]),
-            "total_tokens": int(usage.get(
-                "total_tokens",
-                usage["prompt_tokens"] + usage["completion_tokens"])),
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": total_tokens,
         }
         self.usage_trace.append(dict(self.last_usage))
 
@@ -278,7 +306,11 @@ class LiveBackend:
         try:
             raw = payload["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
-            raise ValueError("live API response did not include assistant content") from exc
+            raise LiveResponseError(
+                "live API response did not include assistant content"
+            ) from exc
+        if not isinstance(raw, str) or not raw.strip():
+            raise LiveResponseError("live API returned empty assistant content")
         return _parse_move(raw)
 
     def token_estimate(self, transcript):
@@ -295,11 +327,28 @@ def _parse_move(text):
     """The model must answer in JSON. Anything else is a run you cannot
     grade, so say so loudly rather than guessing."""
     try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        return {"final": {"decision": "escalate",
-                          "reason": "model did not return parseable JSON"},
-                "thought": "unparseable: %s" % text[:200]}
+        move = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise LiveResponseError("model did not return parseable JSON") from exc
+
+    # Reject malformed moves before they reach the agent loop.
+    if not isinstance(move, dict):
+        raise LiveResponseError("model response JSON was not an object")
+    if "final" in move:
+        if not isinstance(move["final"], dict):
+            raise LiveResponseError("model final response was not an object")
+        return move
+
+    calls = move.get("calls")
+    if calls is None and "tool" in move and "args" in move:
+        calls = [(move["tool"], move["args"])]
+    if not isinstance(calls, list) or not calls:
+        raise LiveResponseError("model response contained no final answer or tool calls")
+    for call in calls:
+        if (not isinstance(call, (list, tuple)) or len(call) != 2 or
+                not isinstance(call[0], str) or not isinstance(call[1], dict)):
+            raise LiveResponseError("model returned a malformed tool call")
+    return move
 
 
 def _live_call(messages):
@@ -324,8 +373,18 @@ def _live_call(messages):
         data=body,
         headers={"Authorization": "Bearer " + config.API_KEY,
                  "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        payload = json.load(r)
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            payload = json.load(r)
+    except urllib.error.HTTPError as exc:
+        # Report the provider status without exposing request credentials.
+        raise LiveAPIError("live API returned HTTP %s" % exc.code) from exc
+    except urllib.error.URLError as exc:
+        raise LiveAPIError("live API network error: %s" % exc.reason) from exc
+    except TimeoutError as exc:
+        raise LiveAPIError("live API request timed out") from exc
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise LiveResponseError("live API returned invalid JSON") from exc
     # Return the whole response so LiveBackend can retain measured usage.
     return payload
 

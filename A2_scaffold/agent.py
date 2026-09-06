@@ -74,6 +74,7 @@ def run_case(case_id, problem=None, approve=None, verbose=False,
     iterations = 0       # loop-safety only; never reported
     tokens_in = tokens_out = 0
     stopped_by = None
+    backend_error = None
 
     # On the scripted backend the gate auto-approves so the run stays
     # deterministic. The RECORD still shows the gate was reached and
@@ -87,7 +88,23 @@ def run_case(case_id, problem=None, approve=None, verbose=False,
             if iterations > config.MAX_TURNS + 2:
                 raise GuardrailStop("step_cap", "loop did not terminate")
 
-            move = backend.next_move(transcript)
+            # Convert live API and response failures into an auditable result.
+            # Configuration errors such as a missing API key remain loud exits.
+            try:
+                move = backend.next_move(transcript)
+            except Exception as exc:
+                stopped_by = getattr(exc, "reason", "backend_error")
+                backend_error = {
+                    "iteration": iterations,
+                    "type": type(exc).__name__,
+                    "message": str(exc),
+                }
+                record = {
+                    "decision": "escalate",
+                    "reason": "%s at model iteration %d: %s"
+                              % (stopped_by, iterations, exc),
+                }
+                break
             ti, to = backend.token_estimate(transcript)
             tokens_in, tokens_out = tokens_in + ti, tokens_out + to
             guards.check_budget(tokens_in + tokens_out)
@@ -206,6 +223,7 @@ def run_case(case_id, problem=None, approve=None, verbose=False,
         "seconds": round(time.time() - started, 3),
         "guardrails_fired": guards.fired,
         "stopped_by": stopped_by,
+        "backend_error": backend_error,
         "backend": backend.name,
         # Preserve each live response's API-reported token counts for audit.
         "model_usage": getattr(backend, "usage_trace", []),

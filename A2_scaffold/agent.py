@@ -32,7 +32,8 @@ from backends import make_backend
 from guardrails import Guardrails, GuardrailStop
 
 
-def run_case(case_id, problem=None, approve=None, verbose=False):
+def run_case(case_id, problem=None, approve=None, verbose=False,
+             execution_mode="grouped"):
     """Run ONE case from a clean state and return the decision record.
 
     ISOLATION (D4): everything this function needs is created inside it.
@@ -49,14 +50,19 @@ def run_case(case_id, problem=None, approve=None, verbose=False):
     # backend this IS the experiment D2(b) measures: the descriptors and
     # the routing rules, assembled by prompt.build_system_prompt().
     #     python3 run_eval.py --prompt      to see the exact text
+    # Pass the requested scripted mode through the backend factory.
+    # The trailing optional parameter keeps existing run_case calls valid.
     backend = make_backend(
         case_id,
         tool_descriptors=[tools.DESCRIPTORS[n] for n in tools.REGISTRY[problem]
                           if n in tools.DESCRIPTORS],
-        system_prompt=prompt.build_system_prompt(problem))
+        system_prompt=prompt.build_system_prompt(problem),
+        execution_mode=execution_mode)
 
     transcript = []      # what the model would see
     evidence = []        # every tool actually called, in order
+    # Step 1: Keep a separate execution log for each case.
+    tool_trace = []
 
     # TURNS ARE TOOL-CALLING TURNS. The concluding move - where the agent
     # writes its decision record - is bookkeeping, not a turn. This is the
@@ -68,6 +74,7 @@ def run_case(case_id, problem=None, approve=None, verbose=False):
     iterations = 0       # loop-safety only; never reported
     tokens_in = tokens_out = 0
     stopped_by = None
+    backend_error = None
 
     # On the scripted backend the gate auto-approves so the run stays
     # deterministic. The RECORD still shows the gate was reached and
@@ -81,7 +88,27 @@ def run_case(case_id, problem=None, approve=None, verbose=False):
             if iterations > config.MAX_TURNS + 2:
                 raise GuardrailStop("step_cap", "loop did not terminate")
 
-            move = backend.next_move(transcript)
+            # Convert live API and response failures into an auditable result.
+            # Configuration errors such as a missing API key remain loud exits.
+            try:
+                move = backend.next_move(transcript)
+            except Exception as exc:
+                # A malformed model response may still have consumed tokens.
+                # Consume any usage retained before response validation failed.
+                ti, to = backend.token_estimate(transcript)
+                tokens_in, tokens_out = tokens_in + ti, tokens_out + to
+                stopped_by = getattr(exc, "reason", "backend_error")
+                backend_error = {
+                    "iteration": iterations,
+                    "type": type(exc).__name__,
+                    "message": str(exc),
+                }
+                record = {
+                    "decision": "escalate",
+                    "reason": "%s at model iteration %d: %s"
+                              % (stopped_by, iterations, exc),
+                }
+                break
             ti, to = backend.token_estimate(transcript)
             tokens_in, tokens_out = tokens_in + ti, tokens_out + to
             guards.check_budget(tokens_in + tokens_out)
@@ -116,12 +143,62 @@ def run_case(case_id, problem=None, approve=None, verbose=False):
                             "%s awaits human approval (autonomy=%s)"
                             % (name, config.AUTONOMY))
 
-                result = tools.call(problem, name, args)
+                # Step 2: Record calls only after the pre-execution guards pass.
+                # Blocked attempts remain in guardrails_fired, not tool_trace.
+                trace_entry = {
+                    "turn": turns,
+                    "tool": name,
+                    "args": args,
+                    "observation": None,
+                    "seconds": None,
+                    "error": None,
+                }
+                # Step 3: Measure tool execution time with a monotonic clock.
+                call_started = time.perf_counter()
+                try:
+                    # Step 4: Save the actual result, including valid empty results.
+                    result = tools.call(problem, name, args)
+                    trace_entry["observation"] = result
+                except GuardrailStop as stop:
+                    # Step 5: Preserve the existing outer guardrail handler.
+                    trace_entry["error"] = {
+                        "type": type(stop).__name__,
+                        "message": stop.detail,
+                    }
+                    raise
+                except Exception as exc:
+                    # Step 6: Stop this case explicitly when a tool fails.
+                    # Do not continue to a booking after an incomplete lookup.
+                    trace_entry["error"] = {
+                        "type": type(exc).__name__,
+                        "message": str(exc),
+                    }
+                    stopped_by = "tool_error"
+                    record = {
+                        "decision": "escalate",
+                        "reason": (
+                            f"tool {name} failed: "
+                            f"{type(exc).__name__}: {exc}"
+                        ),
+                    }
+                    break
+                finally:
+                    # Step 7: Save timing and trace even when execution fails.
+                    trace_entry["seconds"] = round(
+                        time.perf_counter() - call_started, 6
+                    )
+                    tool_trace.append(trace_entry)
+
                 evidence.append(name)
                 observations.append({"tool": name, "args": args,
                                      "observation": result})
                 if verbose:
                     print("       %-26s -> %s" % (name, _short(result)))
+
+            # Step 8: Also exit the outer loop after a tool error.
+            # The break above exits only the inner tool-call loop.
+            if stopped_by == "tool_error":
+                break
 
             transcript.append({"role": "assistant",
                                "content": move.get("thought", "")})
@@ -141,6 +218,8 @@ def run_case(case_id, problem=None, approve=None, verbose=False):
     record.update({
         "case_id": case_id,
         "evidence": evidence,
+        # Step 9: Expose the execution log to the evaluator and result output.
+        "tool_trace": tool_trace,
         "turns": turns,
         "tokens_in": tokens_in,
         "tokens_out": tokens_out,
@@ -148,7 +227,19 @@ def run_case(case_id, problem=None, approve=None, verbose=False):
         "seconds": round(time.time() - started, 3),
         "guardrails_fired": guards.fired,
         "stopped_by": stopped_by,
+        "backend_error": backend_error,
         "backend": backend.name,
+        # Preserve each live response's API-reported token counts for audit.
+        "model_usage": getattr(backend, "usage_trace", []),
+        # Make the token source explicit so estimates are never reported as
+        # measurements in the evaluation or cost analysis.
+        "token_measurement": (
+            "api_reported" if backend.name == "live" else "scripted_estimate"
+        ),
+        # Only scripted runs have a controlled grouping mode in this experiment.
+        "execution_mode": (
+            backend.execution_mode if backend.name == "scripted" else None
+        ),
     })
     return record
 

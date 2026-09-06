@@ -26,9 +26,29 @@ moves is how you test the parts you wrote.
 ====================================================================
 """
 import json
+import urllib.error
 import urllib.request
+from copy import deepcopy
 
 import config
+
+
+class LiveBackendError(RuntimeError):
+    """Base error carrying a stable stopped_by value for live runs."""
+
+    reason = "backend_error"
+
+
+class LiveAPIError(LiveBackendError):
+    """The live provider could not return a usable HTTP response."""
+
+    reason = "api_error"
+
+
+class LiveResponseError(LiveBackendError):
+    """The provider responded, but its payload or model move was invalid."""
+
+    reason = "response_error"
 
 
 # =====================================================================
@@ -135,12 +155,64 @@ SCRIPTS = {
 }
 
 
+def build_script_steps(case_id, execution_mode="grouped"):
+    """Build an independent action sequence for one scripted run."""
+
+    # Step 1: Reject unsupported modes instead of silently guessing.
+    if execution_mode not in ("grouped", "sequential"):
+        raise ValueError(
+            "execution_mode must be 'grouped' or 'sequential'"
+        )
+
+    # Step 2: Copy nested arguments too, keeping the source script unchanged.
+    steps = deepcopy(SCRIPTS[case_id])
+
+    # Step 3: Preserve the original grouping for the default mode.
+    if execution_mode == "grouped":
+        return steps
+
+    sequential_steps = []
+    for step in steps:
+        # Step 4: Keep the final answer separate from tool-calling actions.
+        if "final" in step:
+            sequential_steps.append(step)
+            continue
+
+        # Step 5: Accept both action formats supported by the agent loop.
+        calls = step.get("calls")
+        if calls is None:
+            calls = [(step["tool"], step["args"])]
+
+        # Step 6: Fail explicitly if an action contains no tool calls.
+        if not calls:
+            raise ValueError("A scripted action must contain a tool call")
+
+        # Step 7: Leave existing single-call actions unchanged.
+        if len(calls) == 1:
+            sequential_steps.append(step)
+            continue
+
+        # Step 8: Split groups while preserving call order and arguments.
+        # Neutral replay text avoids claiming that calls still run together.
+        for name, args in calls:
+            sequential_steps.append({
+                "thought": (
+                    f"Sequential replay: execute {name} "
+                    "as a separate tool-calling turn."
+                ),
+                "calls": [(name, args)],
+            })
+
+    # Step 9: Return the derived sequence; SCRIPTS remains the shared source.
+    return sequential_steps
+
+
 class ScriptedBackend:
     """Replays SCRIPTS[case_id]. Deterministic, free, offline."""
 
     name = "scripted"
 
-    def __init__(self, case_id):
+    def __init__(self, case_id, execution_mode="grouped"):
         if case_id not in SCRIPTS:
             raise SystemExit(
                 "\n  No script for case %r.\n"
@@ -150,7 +222,11 @@ class ScriptedBackend:
                 "    2. set BACKEND = \"live\" in config.py (this costs money).\n"
                 "  Scripted cases so far: %s\n"
                 % (case_id, case_id, ", ".join(sorted(SCRIPTS))))
-        self.steps = SCRIPTS[case_id]
+        # Step 10: Store the mode and prepare this run's private sequence.
+        # Defaulting to grouped preserves existing constructor calls.
+        self.execution_mode = execution_mode
+        self.steps = build_script_steps(case_id, execution_mode)
+        # Start replaying at the first action in the selected sequence.
         self.i = 0
 
     def next_move(self, transcript):
@@ -185,30 +261,101 @@ class LiveBackend:
         self.case_id = case_id
         self.tools = tool_descriptors
         self.system_prompt = system_prompt
+        # Step 1: Keep the latest API-reported usage for the agent loop.
+        self.last_usage = {"prompt_tokens": 0, "completion_tokens": 0,
+                           "total_tokens": 0}
+        self.usage_available = False
+        # Step 2: Preserve per-response usage for later cost auditing.
+        self.usage_trace = []
 
     def next_move(self, transcript):
-        messages = [{"role": "system", "content": self.system_prompt}]
+        # A failed request must not reuse usage from the preceding response.
+        self.usage_available = False
+        # Step 3: Give the live model the case identifier on every stateless
+        # request. The system prompt describes the task but not the case.
+        messages = [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user",
+             "content": "Process case_id %s using the available tools."
+                        % self.case_id},
+        ]
         for entry in transcript:
             messages.append({"role": entry["role"], "content": entry["content"]})
-        raw = _live_call(messages)
+        payload = _live_call(messages)
+
+        # Step 4: Require measured usage instead of silently recording zeros.
+        if not isinstance(payload, dict):
+            raise LiveResponseError("live API response was not a JSON object")
+        usage = payload.get("usage") or {}
+        if "prompt_tokens" not in usage or "completion_tokens" not in usage:
+            raise LiveResponseError("live API response did not include token usage")
+        try:
+            prompt_tokens = int(usage["prompt_tokens"])
+            completion_tokens = int(usage["completion_tokens"])
+            total_tokens = int(usage.get(
+                "total_tokens", prompt_tokens + completion_tokens))
+        except (TypeError, ValueError) as exc:
+            raise LiveResponseError("live API token usage was not numeric") from exc
+        if min(prompt_tokens, completion_tokens, total_tokens) < 0:
+            raise LiveResponseError("live API token usage contained a negative value")
+        self.last_usage = {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": total_tokens,
+        }
+        self.usage_available = True
+        self.usage_trace.append(dict(self.last_usage))
+
+        # Step 5: Parse only the assistant content after usage is recorded.
+        try:
+            raw = payload["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise LiveResponseError(
+                "live API response did not include assistant content"
+            ) from exc
+        if not isinstance(raw, str) or not raw.strip():
+            raise LiveResponseError("live API returned empty assistant content")
         return _parse_move(raw)
 
-    @staticmethod
-    def token_estimate(transcript):
-        # Replace with the usage numbers the API returns. Estimating here
-        # and calling it measured is the mistake D6 punishes.
-        return 0, 0
+    def token_estimate(self, transcript):
+        """Return measured usage from the most recent live API response.
+
+        The method name is retained because the agent loop also uses it for
+        scripted estimates. In live mode these values come from the API.
+        """
+        if not self.usage_available:
+            return 0, 0
+        self.usage_available = False
+        return (self.last_usage["prompt_tokens"],
+                self.last_usage["completion_tokens"])
 
 
 def _parse_move(text):
     """The model must answer in JSON. Anything else is a run you cannot
     grade, so say so loudly rather than guessing."""
     try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        return {"final": {"decision": "escalate",
-                          "reason": "model did not return parseable JSON"},
-                "thought": "unparseable: %s" % text[:200]}
+        move = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise LiveResponseError("model did not return parseable JSON") from exc
+
+    # Reject malformed moves before they reach the agent loop.
+    if not isinstance(move, dict):
+        raise LiveResponseError("model response JSON was not an object")
+    if "final" in move:
+        if not isinstance(move["final"], dict):
+            raise LiveResponseError("model final response was not an object")
+        return move
+
+    calls = move.get("calls")
+    if calls is None and "tool" in move and "args" in move:
+        calls = [(move["tool"], move["args"])]
+    if not isinstance(calls, list) or not calls:
+        raise LiveResponseError("model response contained no final answer or tool calls")
+    for call in calls:
+        if (not isinstance(call, (list, tuple)) or len(call) != 2 or
+                not isinstance(call[0], str) or not isinstance(call[1], dict)):
+            raise LiveResponseError("model returned a malformed tool call")
+    return move
 
 
 def _live_call(messages):
@@ -233,15 +380,35 @@ def _live_call(messages):
         data=body,
         headers={"Authorization": "Bearer " + config.API_KEY,
                  "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        payload = json.load(r)
-    return payload["choices"][0]["message"]["content"]
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            payload = json.load(r)
+    except urllib.error.HTTPError as exc:
+        # Report the provider status without exposing request credentials.
+        raise LiveAPIError("live API returned HTTP %s" % exc.code) from exc
+    except urllib.error.URLError as exc:
+        raise LiveAPIError("live API network error: %s" % exc.reason) from exc
+    except TimeoutError as exc:
+        raise LiveAPIError("live API request timed out") from exc
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise LiveResponseError("live API returned invalid JSON") from exc
+    # Return the whole response so LiveBackend can retain measured usage.
+    return payload
 
 
-def make_backend(case_id, tool_descriptors=None, system_prompt=""):
+def make_backend(case_id, tool_descriptors=None, system_prompt="",
+                 execution_mode="grouped"):
+    # Validate the mode before constructing a backend.
+    if execution_mode not in ("grouped", "sequential"):
+        raise ValueError("execution_mode must be 'grouped' or 'sequential'")
     if config.BACKEND == "scripted":
-        return ScriptedBackend(case_id)
+        # Forward the mode to the scripted action-sequence builder.
+        return ScriptedBackend(case_id, execution_mode=execution_mode)
     if config.BACKEND == "live":
+        # Splitting live model moves is not implemented by this experiment.
+        # Reject this request rather than falsely reporting a sequential run.
+        if execution_mode == "sequential":
+            raise ValueError("sequential mode is supported only by the scripted backend")
         return LiveBackend(case_id, tool_descriptors or [], system_prompt)
     raise SystemExit("BACKEND must be 'scripted' or 'live', not %r"
                      % config.BACKEND)

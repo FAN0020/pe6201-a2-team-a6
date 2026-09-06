@@ -93,6 +93,10 @@ def run_case(case_id, problem=None, approve=None, verbose=False,
             try:
                 move = backend.next_move(transcript)
             except Exception as exc:
+                # A malformed model response may still have consumed tokens.
+                # Consume any usage retained before response validation failed.
+                ti, to = backend.token_estimate(transcript)
+                tokens_in, tokens_out = tokens_in + ti, tokens_out + to
                 stopped_by = getattr(exc, "reason", "backend_error")
                 backend_error = {
                     "iteration": iterations,

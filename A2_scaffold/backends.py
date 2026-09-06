@@ -264,10 +264,13 @@ class LiveBackend:
         # Step 1: Keep the latest API-reported usage for the agent loop.
         self.last_usage = {"prompt_tokens": 0, "completion_tokens": 0,
                            "total_tokens": 0}
+        self.usage_available = False
         # Step 2: Preserve per-response usage for later cost auditing.
         self.usage_trace = []
 
     def next_move(self, transcript):
+        # A failed request must not reuse usage from the preceding response.
+        self.usage_available = False
         # Step 3: Give the live model the case identifier on every stateless
         # request. The system prompt describes the task but not the case.
         messages = [
@@ -300,6 +303,7 @@ class LiveBackend:
             "completion_tokens": completion_tokens,
             "total_tokens": total_tokens,
         }
+        self.usage_available = True
         self.usage_trace.append(dict(self.last_usage))
 
         # Step 5: Parse only the assistant content after usage is recorded.
@@ -319,6 +323,9 @@ class LiveBackend:
         The method name is retained because the agent loop also uses it for
         scripted estimates. In live mode these values come from the API.
         """
+        if not self.usage_available:
+            return 0, 0
+        self.usage_available = False
         return (self.last_usage["prompt_tokens"],
                 self.last_usage["completion_tokens"])
 

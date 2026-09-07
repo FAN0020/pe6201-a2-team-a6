@@ -33,6 +33,15 @@ class Guardrails:
     instance leaks state and D4 requires every case to start clean."""
 
     def __init__(self, max_turns, max_tokens, autonomy):
+        if not isinstance(max_turns, int) or isinstance(max_turns, bool) \
+                or max_turns < 0:
+            raise ValueError("max_turns must be a non-negative integer")
+        if not isinstance(max_tokens, int) or isinstance(max_tokens, bool) \
+                or max_tokens < 0:
+            raise ValueError("max_tokens must be a non-negative integer")
+        if autonomy not in ("suggest", "confirm", "act"):
+            raise ValueError(
+                "autonomy must be one of: suggest, confirm, act")
         self.max_turns = max_turns
         self.max_tokens = max_tokens
         self.autonomy = autonomy
@@ -41,6 +50,8 @@ class Guardrails:
 
     # ---- 1 · step cap -----------------------------------------------
     def check_turns(self, turn):
+        if not isinstance(turn, int) or isinstance(turn, bool) or turn < 0:
+            raise ValueError("turn must be a non-negative integer")
         if turn > self.max_turns:
             self._fire("step_cap", "reached %d turns" % self.max_turns)
             raise GuardrailStop("step_cap",
@@ -49,6 +60,9 @@ class Guardrails:
 
     # ---- 2 · budget ceiling -----------------------------------------
     def check_budget(self, tokens_so_far):
+        if not isinstance(tokens_so_far, (int, float)) \
+                or isinstance(tokens_so_far, bool) or tokens_so_far < 0:
+            raise ValueError("tokens_so_far must be a non-negative number")
         if tokens_so_far > self.max_tokens:
             self._fire("budget_ceiling", "%d tokens" % tokens_so_far)
             raise GuardrailStop("budget_ceiling",
@@ -63,13 +77,40 @@ class Guardrails:
         guard deleted: 8 turns, no answer, 1.6x the cost, and NO
         exception raised. It did not crash. It burned money in a circle.
         """
-        signature = (tool, repr(sorted(args.items())))
+        if not isinstance(tool, str) or not tool:
+            raise ValueError("tool must be a non-empty string")
+        if not isinstance(args, dict):
+            raise TypeError("args must be a dictionary")
+
+        # Freeze the complete argument structure.  Sorting only the top-level
+        # items is not enough: nested dictionaries can be ordered differently,
+        # and callers may mutate a list/dict after the first check.
+        signature = (tool, self._freeze(args))
         if signature in self.seen_actions:
             self._fire("duplicate_action", "%s repeated" % tool)
             raise GuardrailStop("duplicate_action",
                                 "%s called again with identical arguments "
                                 "- the loop is not progressing" % tool)
         self.seen_actions.add(signature)
+
+    @classmethod
+    def _freeze(cls, value):
+        """Return a deterministic, hashable representation of action args."""
+        if isinstance(value, dict):
+            return ("dict", tuple(sorted(
+                ((cls._freeze(key), cls._freeze(item))
+                 for key, item in value.items()), key=repr)))
+        if isinstance(value, (list, tuple)):
+            return (type(value).__name__, tuple(cls._freeze(item)
+                                                for item in value))
+        if isinstance(value, set):
+            return ("set", tuple(sorted((cls._freeze(item)
+                                          for item in value), key=repr)))
+        try:
+            hash(value)
+        except TypeError:
+            return (type(value).__name__, repr(value))
+        return (type(value).__name__, value)
 
     # ---- 4 · autonomy gate ------------------------------------------
     def gate(self, action_name, payload, approve=None):
@@ -83,6 +124,11 @@ class Guardrails:
         record still shows the gate was passed, which is what a marker
         checks for.
         """
+        if not isinstance(action_name, str) or not action_name:
+            raise ValueError("action_name must be a non-empty string")
+        if not isinstance(payload, dict):
+            raise TypeError("payload must be a dictionary")
+
         if self.autonomy == "act":
             self._fire("gate_passed", "%s (autonomy=act)" % action_name)
             return True

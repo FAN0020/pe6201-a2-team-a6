@@ -456,14 +456,70 @@ REFERRALS = [
 # And LABEL what you add, in your own copy of the answer key.
 # ═════════════════════════════════════════════════════════════════════════════
 
-EXTRA_SPECIALTIES = []     # {"code", "name", "mandatory_tests": [{"code","name"}],
+EXTRA_SPECIALTIES = [{"code": "ENT", "name": "Ear Nose and Throat",
+     "mandatory_tests": [{"code": "AUD-01", "name": "audiometry"}],
+     "red_flag_terms": ["sudden hearing loss", "airway compromise"],
+     "treats": ["ear", "hearing", "sinus", "throat", "tonsil"]}]     # {"code", "name", "mandatory_tests": [{"code","name"}],
                            #  "red_flag_terms": [...], "treats": [...]}
-EXTRA_CLINIC_SLOTS = []    # {"clinic", "specialty", "band", "date", "time",
+EXTRA_CLINIC_SLOTS = [{"clinic": "ENT-C1", "specialty": "ENT", "band": "routine",
+     "date": "2026-11-04", "time": "09:00", "capacity_remaining": 1},
+    {"clinic": "ENT-C2", "specialty": "ENT", "band": "soon",
+     "date": "2026-09-30", "time": "10:00", "capacity_remaining": 1}]    # {"clinic", "specialty", "band", "date", "time",
                            #  "capacity_remaining"}
-EXTRA_PATIENTS = []        # {"patient_id", "date_of_birth",
+EXTRA_PATIENTS = [ {"patient_id": "P-2801", "date_of_birth": "1994-03-12",
+     "existing_appointments": []},
+    {"patient_id": "P-2802", "date_of_birth": "1988-07-24",
+     "existing_appointments": []},
+    {"patient_id": "P-2803", "date_of_birth": "1976-11-08",
+     "existing_appointments": []},
+    {"patient_id": "P-2804", "date_of_birth": "1969-02-17",
+     "existing_appointments": []},
+    {"patient_id": "P-2805", "date_of_birth": "1990-05-30",
+     "existing_appointments": []},
+    {"patient_id": "P-2806", "date_of_birth": "1982-09-14",
+     "existing_appointments": []}]        # {"patient_id", "date_of_birth",
                            #  "existing_appointments": [{"specialty","clinic","date"}]}
-EXTRA_CONTACTS = []        # {"patient_id", "method", "value"}
-EXTRA_REFERRALS = []       # {"referral_id", "patient_id", "referring_clinic",
+EXTRA_CONTACTS = [ {"patient_id": "P-2801", "method": "sms", "value": "+65 9000 2801"},
+    {"patient_id": "P-2802", "method": "sms", "value": "+65 9000 2802"},
+    {"patient_id": "P-2803", "method": "sms", "value": "+65 9000 2803"},
+    {"patient_id": "P-2804", "method": "sms", "value": "+65 9000 2804"},
+    {"patient_id": "P-2805", "method": "sms", "value": "+65 9000 2805"},
+    {"patient_id": "P-2806", "method": "sms", "value": "+65 9000 2806"}]        # {"patient_id", "method", "value"}
+EXTRA_REFERRALS = [  {"referral_id": "REF-6801", "patient_id": "P-2801",
+     "referring_clinic": "Jurong Polyclinic", "specialty": "ENT",
+     "date_received": "2026-09-09",
+     "clinical_summary": "Persistent hearing difficulty in the left ear.",
+     "tests_attached": ["AUD-01"], "tests_attached_on": "2026-09-08"},
+
+    {"referral_id": "REF-6802", "patient_id": "P-2802",
+     "referring_clinic": "Tampines Polyclinic", "specialty": "ENT",
+     "date_received": "2026-09-09",
+     "clinical_summary": "Progressive over weeks hearing difficulty in the right ear.",
+     "tests_attached": ["AUD-01"], "tests_attached_on": "2026-09-08"},
+
+    {"referral_id": "REF-6803", "patient_id": "P-2803",
+     "referring_clinic": "Woodlands Polyclinic", "specialty": "OPH",
+     "date_received": "2026-09-09",
+     "clinical_summary": "Gradual blurred vision in the left eye for several months.",
+     "tests_attached": ["IOP-03"], "tests_attached_on": "2026-09-08"},
+
+    {"referral_id": "REF-6804", "patient_id": "P-2804",
+     "referring_clinic": "Bedok Polyclinic", "specialty": "CARD",
+     "date_received": "2026-09-09",
+     "clinical_summary": "Intermittent palpitations and breathlessness without chest pain.",
+     "tests_attached": ["ECG-12"], "tests_attached_on": "2026-09-08"},
+
+    {"referral_id": "REF-6805", "patient_id": "P-2805",
+     "referring_clinic": "Clementi Polyclinic", "specialty": "OPH",
+     "date_received": "2026-09-09",
+     "clinical_summary": "Chemical splash to the right eye at work today.",
+     "tests_attached": ["VF-01"], "tests_attached_on": "2026-09-09"},
+
+    {"referral_id": "REF-6806", "patient_id": "P-2806",
+     "referring_clinic": "Sengkang Polyclinic", "specialty": "ORT",
+     "date_received": "2026-09-09",
+     "clinical_summary": "Severe lower back pain with concern for cauda equina.",
+     "tests_attached": ["XR-KNEE"], "tests_attached_on": "2026-09-08"}]       # {"referral_id", "patient_id", "referring_clinic",
                            #  "specialty", "date_received", "clinical_summary",
                            #  "tests_attached", "tests_attached_on"}
 

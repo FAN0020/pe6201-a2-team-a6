@@ -31,6 +31,7 @@ import copy
 
 import backends
 import config
+import tools
 from agent import run_case
 from guardrails import Guardrails
 
@@ -48,6 +49,38 @@ def _looping_script(CASE):
     return steps[:2] + [repeat, repeat] + steps[2:]
 
 
+def _tool_interface_failure_script():
+    """The same case with the slot-tool's band constraint removed.
+
+    The working tool requires the model to pass the band returned by
+    ``check_referral_criteria``.  This bad script represents a model using
+    the weakened interface: it omits ``band`` and then books the first slot
+    returned by that permissive tool.  The referral is routine, but the
+    first urgent slot is booked.
+    """
+    return [
+        copy.deepcopy(backends.SCRIPTS["REF-5602"][0]),
+        copy.deepcopy(backends.SCRIPTS["REF-5602"][1]),
+        {"thought": "Search the whole window; the weakened slot interface "
+                    "does not require the urgency band.",
+         "calls": [("get_clinic_slots", {
+             "specialty": "OPH", "from": "2026-09-09", "to": "2026-11-04"
+         })]},
+        {"thought": "Book the first available slot returned.",
+         "calls": [("book_slot", {
+             "clinic": "OPH-C1", "date": "2026-09-15", "time": "09:40",
+             "referral_id": "REF-5602"
+         })]},
+        {"final": {
+            "decision": "book",
+            "booked": {"clinic": "OPH-C1", "date": "2026-09-15",
+                       "time": "09:40"},
+            "reason": "Booked the first returned slot without preserving "
+                      "the routine band.",
+        }, "thought": "Finish."},
+    ]
+
+
 def main(case=None, problem=None):
     problem = problem or config.PROBLEM
     CASE = case or CASES[problem]
@@ -61,10 +94,10 @@ def main(case=None, problem=None):
     # ---- BEFORE: the working agent ----------------------------------
     before = run_case(CASE, problem=problem)
     print("BEFORE - the working agent, guard in place")
-    print("  turns %d · tool calls %d · tokens %d · cost US$%.5f · decision %s"
+    print("  turns %d · tool calls %d · tokens %d · cost US$%.5f · decision %s · stopped_by %s"
           % (before["turns"], len(before["evidence"]),
              before["tokens_in"] + before["tokens_out"],
-             before["cost_usd"], before["decision"]))
+             before["cost_usd"], before["decision"], before["stopped_by"]))
 
     # ---- AFTER: the same agent, MINUS the de-duplication guard ------
     backends.SCRIPTS[CASE] = _looping_script(CASE)
@@ -135,5 +168,62 @@ def main(case=None, problem=None):
     print()
 
 
+def run_tool_interface_failure():
+    """Reproduce a distinct D7 failure by deleting a tool constraint."""
+    case = CASES["B"]
+    original_script = backends.SCRIPTS[case]
+    original_tool = tools.REGISTRY["B"]["get_clinic_slots"]
+
+    # BEFORE: the shipped interface requires `band`, so the working script
+    # filters out urgent/soon slots and books routine OPH-C2 on 10-14.
+    before = run_case(case, problem="B")
+    print()
+    print("=" * 68)
+    print("  SECOND FAILURE · TOOL INTERFACE (missing required band)")
+    print("BEFORE - required band constraint in get_clinic_slots")
+    print("  turns %d · tool calls %d · tokens %d · cost US$%.5f · decision %s · stopped_by %s"
+          % (before["turns"], len(before["evidence"]),
+             before["tokens_in"] + before["tokens_out"], before["cost_usd"],
+             before["decision"], before["stopped_by"]))
+    print("  booked: %s" % before.get("booked"))
+
+    def permissive_slots(specialty, **window):
+        # This is the interface deletion: band is no longer required.  The
+        # unsafe default is intentionally visible in the reproduction.
+        return original_tool(specialty, band="urgent", **window)
+
+    backends.SCRIPTS[case] = _tool_interface_failure_script()
+    tools.REGISTRY["B"]["get_clinic_slots"] = permissive_slots
+    try:
+        after = run_case(case, problem="B")
+    finally:
+        tools.REGISTRY["B"]["get_clinic_slots"] = original_tool
+        backends.SCRIPTS[case] = original_script
+
+    print("AFTER - same agent MINUS the required band interface constraint")
+    print("  turns %d · tool calls %d · tokens %d · cost US$%.5f · decision %s · stopped_by %s"
+          % (after["turns"], len(after["evidence"]),
+             after["tokens_in"] + after["tokens_out"], after["cost_usd"],
+             after["decision"], after["stopped_by"]))
+    print("  booked: %s" % after.get("booked"))
+    print("  tool calls: %s" % after["evidence"])
+    print()
+    print("  INSTRUMENTATION: both runs terminate normally; the failure is")
+    print("  semantic, not a crash. The criteria result says band=routine,")
+    print("  but AFTER books urgent OPH-C1 on 2026-09-15.")
+    print("  CORRECT FIX: tool-interface layer - require band and validate")
+    print("  it against the allowed values, so omission cannot silently widen")
+    print("  or change the urgency filter.")
+    print("  NOT loop control: the bad run is 4 turns, below the cap of %d,"
+          % config.MAX_TURNS)
+    print("  and it makes no duplicate calls. A cap or de-duplication guard")
+    print("  would leave the wrong slot semantics untouched.")
+    print("=" * 68)
+    print()
+
+    return before, after
+
+
 if __name__ == "__main__":
     main()
+    run_tool_interface_failure()

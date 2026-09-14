@@ -16,6 +16,9 @@ It is not a replacement for that form.
 - Ran the declared `openai/gpt-5.4` descriptor-v1 job and an additional v2
   same-model control from clean detached checkouts; retained every failure and
   API-reported token/cost record.
+- Ran three selected evidence checks per result with a named different-family
+  judge, storing prompt/source hashes and API measurements in an immutable
+  sidecar.
 - Aggregated report-ready JSON/CSV/Markdown tables, documented defects and
   prepared the D4/D5 demo runbook.
 

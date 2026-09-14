@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "generated_at_utc": "2026-09-14T19:22:46.159803+00:00",
+  "generated_at_utc": "2026-09-14T19:30:16.183168+00:00",
   "freeze_sha": "e36bb1b2fcad625ed944e7df863165d95c0ef53f",
   "result_count": 2,
   "compatible_result_count": 2,
@@ -27,6 +27,9 @@
       "provider_reported_cost_usd": 0.731035,
       "error_trials": 28,
       "judgement_pending": 3,
+      "judgement_passed": 0,
+      "judgement_total": 3,
+      "judgement_status": "complete",
       "compatible": true,
       "issues": ""
     },
@@ -52,6 +55,9 @@
       "provider_reported_cost_usd": 0.8811825,
       "error_trials": 22,
       "judgement_pending": 3,
+      "judgement_passed": 0,
+      "judgement_total": 3,
+      "judgement_status": "complete",
       "compatible": true,
       "issues": ""
     }

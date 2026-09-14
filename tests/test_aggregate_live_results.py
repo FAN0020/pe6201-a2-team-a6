@@ -1,4 +1,7 @@
 import copy
+import hashlib
+import json
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -100,6 +103,26 @@ class AggregateValidationTests(unittest.TestCase):
         self.assertFalse(row["compatible"])
         self.assertIn("source tree was not clean", row["issues"])
         self.assertIn("prompt hash mismatch", row["issues"])
+
+    def test_accepts_judgements_only_for_the_exact_source_file(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "result.json"
+            path.write_text(json.dumps(payload()), encoding="utf-8")
+            source_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+            judgement = {
+                "source_file_sha256": source_hash,
+                "passed": 2,
+                "total": 3,
+            }
+            row = _row(path, payload(), manifest(), judgement)
+            self.assertTrue(row["compatible"])
+            self.assertEqual(row["judgement_status"], "complete")
+            self.assertEqual(row["judgement_passed"], 2)
+
+            judgement["source_file_sha256"] = "wrong"
+            row = _row(path, payload(), manifest(), judgement)
+            self.assertFalse(row["compatible"])
+            self.assertIn("judgement source hash mismatch", row["issues"])
 
 
 if __name__ == "__main__":

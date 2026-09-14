@@ -54,3 +54,8 @@ retrying it. The dominant failure was protocol adherence: the model returned
 plain prose or concatenated JSON, so the strict parser stopped safely. Close by
 noting that the other four declared v2 model files are required before the team
 can claim a complete multi-family battery.
+
+Open `artifacts/judgement_results.json` to show that the grading prompt, exact
+source file hashes, judge identity and API usage are recorded separately. The
+scripted evidence passed 3/3 judgement checks; both live arms passed 0/3 because
+their selected cases stopped without evidence-bearing final reasons.

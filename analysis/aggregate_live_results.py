@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,7 +19,11 @@ def _load(path):
         return json.load(handle)
 
 
-def _row(path, payload, manifest):
+def _sha256(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _row(path, payload, manifest, judgement=None):
     run = payload.get("run", {})
     evaluation = payload.get("evaluation_set", {})
     summary = payload.get("summary", {})
@@ -73,6 +78,16 @@ def _row(path, payload, manifest):
             "input_usd_per_million", "output_usd_per_million",
             "source", "checked_on")):
         issues.append("price provenance incomplete")
+    judgement_passed = judgement_total = None
+    judgement_status = "not supplied"
+    if judgement is not None:
+        if judgement.get("source_file_sha256") != _sha256(path):
+            issues.append("judgement source hash mismatch")
+            judgement_status = "source mismatch"
+        else:
+            judgement_passed = judgement.get("passed")
+            judgement_total = judgement.get("total")
+            judgement_status = "complete"
     return {
         "file": path.name,
         "model": run.get("model_id"),
@@ -96,6 +111,9 @@ def _row(path, payload, manifest):
             summary.get("provider_reported_cost_usd"),
         "error_trials": summary.get("error_trials"),
         "judgement_pending": summary.get("judgement_pending"),
+        "judgement_passed": judgement_passed,
+        "judgement_total": judgement_total,
+        "judgement_status": judgement_status,
         "compatible": not issues,
         "issues": "; ".join(issues),
     }
@@ -139,15 +157,18 @@ def _markdown(rows, pairs):
         "",
         "Only rows marked compatible share the frozen commit and exact case list.",
         "",
-        "| Model | Descriptor | Trials | Code pass | Negative pass | Median turns | Tokens in/out | Cost (USD) | Errors | Compatible |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---|",
+        "| Model | Descriptor | Trials | Code pass | Negative pass | Judgement | Median turns | Tokens in/out | Cost (USD) | Errors | Compatible |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|",
     ]
     for row in rows:
         lines.append(
-            "| %s | %s | %s | %s | %s | %s | %s / %s | %.4f | %s | %s |" % (
+            "| %s | %s | %s | %s | %s | %s | %s | %s / %s | %.4f | %s | %s |" % (
                 row["model"] or "-", row["descriptor_version"] or "-",
                 row["trials"], _fmt_rate(row["code_pass_rate"]),
                 _fmt_rate(row["negative_code_pass_rate"]),
+                ("%s/%s" % (row["judgement_passed"],
+                             row["judgement_total"])
+                 if row["judgement_status"] == "complete" else "-"),
                 row["median_turns"], row["tokens_in"], row["tokens_out"],
                 row["cost_usd"] or 0.0, row["error_trials"],
                 "yes" if row["compatible"] else "no: " + row["issues"]))
@@ -178,13 +199,22 @@ def main():
     parser.add_argument("--output-json", default="artifacts/live_battery_summary.json")
     parser.add_argument("--output-csv", default="artifacts/live_battery_summary.csv")
     parser.add_argument("--output-md", default="artifacts/live_battery_summary.md")
+    parser.add_argument("--judgements", default="artifacts/judgement_results.json")
     args = parser.parse_args()
 
     input_dir = ROOT / args.input_dir
     manifest = _load(ROOT / args.freeze_manifest)
     expected_freeze = manifest["freeze"]["commit_sha"]
     paths = sorted(input_dir.glob("*.json")) if input_dir.exists() else []
-    rows = [_row(path, _load(path), manifest)
+    judgement_path = ROOT / args.judgements
+    judgement_payload = _load(judgement_path) if judgement_path.exists() else {}
+    judgements = {
+        item["source_file"]: item
+        for item in judgement_payload.get("results", [])
+    }
+    rows = [_row(
+        path, _load(path), manifest,
+        judgements.get(str(path.relative_to(ROOT))))
             for path in paths]
     pairs = _paired([row for row in rows if row["compatible"]])
     payload = {
@@ -210,8 +240,10 @@ def main():
         "freeze_sha", "cases", "negative_cases", "trials", "code_passed",
         "code_pass_rate", "negative_trials", "negative_passed",
         "negative_code_pass_rate", "median_turns", "worst_case_turns",
-        "tokens_in", "tokens_out", "cost_usd", "error_trials",
-        "judgement_pending", "compatible", "issues",
+        "tokens_in", "tokens_out", "cost_usd",
+        "provider_reported_cost_usd", "error_trials", "judgement_pending",
+        "judgement_passed", "judgement_total", "judgement_status",
+        "compatible", "issues",
     ]
     with csv_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")

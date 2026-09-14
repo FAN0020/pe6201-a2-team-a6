@@ -15,8 +15,9 @@ Branch: `feature/evaluation`
   it never reads `expected_outcomes_B.json`.
 - Extended the code check to validate the decision, escalation trigger, named
   missing item, exact booked slot, gated-action count and gate result.
-- Limited judgement checks to selected prose-evidence cases and kept their
-  pending verdicts separate from the code pass rate.
+- Limited judgement checks to selected prose-evidence cases, kept the raw queue
+  separate from the code pass rate, and stored named different-family verdicts
+  in a source-hashed sidecar.
 - Added an auditable result schema with commit SHA, prompt and descriptor hashes,
   branch, backend, model id, prompt/tool/descriptor versions, trial policy,
   API-reported token source, price provenance, errors, negative-only performance
@@ -61,15 +62,17 @@ explicitly labelled and must not be reported as live measurements.
 - `trial_results`: full decision records and traces;
 - `judgement_queue`: only cases selected for human or independent-model review.
 
-The code pass rate is not relabelled as a combined pass rate while any judgement
-verdict remains pending.
+The raw result keeps judgement fields null so the measured run is immutable;
+completed verdicts live in `artifacts/judgement_results.json` and remain a
+separate measure from code pass rate.
 
 `artifacts/results.json` is the same frozen scripted evidence under the generic
 filename requested by the brief. The raw paid measurements are separate under
 `artifacts/live_results/`; `analysis/aggregate_live_results.py` rejects a row
 unless the freeze/source SHA, clean-tree flag, exact case list and counts,
 trial policy, prompt/descriptor hashes, API token source, approval record and
-price provenance all match the manifest.
+price provenance all match the manifest. It also verifies that any independent
+judgement sidecar names the exact SHA-256 of the source result file.
 
 ## Freeze and live-battery procedure
 
@@ -118,14 +121,13 @@ and is reported rather than hidden.
 
 ## Frozen measurements currently available
 
-| Run | Overall code pass | Negative code pass | Median turns | API tokens in/out | Provider cost | Errors |
-|---|---:|---:|---:|---:|---:|---:|
-| Scripted v2 | 58/58 (100.0%) | 42/42 (100.0%) | 2.0 | estimates only | estimate only | 0 |
-| GPT-5.4 v1 descriptor | 20/58 (34.5%) | 20/42 (47.6%) | 2.0 | 234,496 / 9,653 | US$0.731035 | 28 |
-| GPT-5.4 v2 descriptor | 25/58 (43.1%) | 21/42 (50.0%) | 2.0 | 287,085 / 10,898 | US$0.881183 | 22 |
+| Run | Overall code pass | Negative code pass | Judgement pass | Median turns | API tokens in/out | Provider cost | Errors |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Scripted v2 | 58/58 (100.0%) | 42/42 (100.0%) | 3/3 | 2.0 | estimates only | estimate only | 0 |
+| GPT-5.4 v1 descriptor | 20/58 (34.5%) | 20/42 (47.6%) | 0/3 | 2.0 | 234,496 / 9,653 | US$0.731035 | 28 |
+| GPT-5.4 v2 descriptor | 25/58 (43.1%) | 21/42 (50.0%) | 0/3 | 2.0 | 287,085 / 10,898 | US$0.881183 | 22 |
 
 The team-level D5 battery is not complete until the remaining declared v2
 model results are placed in `artifacts/live_results/` and pass the aggregator's
-compatibility checks. Judgement verdicts remain pending because the selected
-live cases did not produce evidence-bearing final reasons; do not invent a
-person or model in `graded_by`.
+compatibility checks. Raw result queues retain their original null verdicts;
+the completed, named judgements are in `artifacts/judgement_results.json`.

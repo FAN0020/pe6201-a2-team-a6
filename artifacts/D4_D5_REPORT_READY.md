@@ -16,15 +16,16 @@ Ordinary cases ran once and negative cases three times, producing 58 trials per
 arm. The code grader checks the decision, canonical trigger, exact named missing
 item, exact clinic/date/time, one approved gated booking and a matching tool
 trace. Three cases also enter a separate judgement queue for prose evidence.
-No combined pass rate is reported while those verdicts are pending.
+Their independently produced sidecar verdicts are reported separately from the
+deterministic code rate.
 
 ## Results
 
-| Backend/model | Descriptor | Code pass | Negative pass | Median/worst turns | Input/output tokens | Cost | Errors |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| Scripted replay | v2 | 58/58 (100.0%) | 42/42 (100.0%) | 2.0 / 4 | 746,400 / 25,440 estimates | US$0.0848 estimate | 0 |
-| OpenAI GPT-5.4 live | v1 | 20/58 (34.5%) | 20/42 (47.6%) | 2.0 / 3 | 234,496 / 9,653 API-reported | US$0.731035 provider | 28 |
-| OpenAI GPT-5.4 live | v2 | 25/58 (43.1%) | 21/42 (50.0%) | 2.0 / 5 | 287,085 / 10,898 API-reported | US$0.881183 provider | 22 |
+| Backend/model | Descriptor | Code pass | Negative pass | Judgement | Median/worst turns | Input/output tokens | Cost | Errors |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Scripted replay | v2 | 58/58 (100.0%) | 42/42 (100.0%) | 3/3 | 2.0 / 4 | 746,400 / 25,440 estimates | US$0.0848 estimate | 0 |
+| OpenAI GPT-5.4 live | v1 | 20/58 (34.5%) | 20/42 (47.6%) | 0/3 | 2.0 / 3 | 234,496 / 9,653 API-reported | US$0.731035 provider | 28 |
+| OpenAI GPT-5.4 live | v2 | 25/58 (43.1%) | 21/42 (50.0%) | 0/3 | 2.0 / 5 | 287,085 / 10,898 API-reported | US$0.881183 provider | 22 |
 
 The same-model descriptor pair changed only the `get_clinic_slots` description.
 V2 gained 5/58 passes (+8.6 percentage points) and one negative-trial pass
@@ -58,5 +59,8 @@ The current table is a complete GPT-5.4 descriptor experiment, not the complete
 multi-model battery. The remaining declared v2 models must use this same freeze,
 case list, v2 prompt and trial policy; model ID is the only experimental change.
 Only compatible raw result files should feed `analysis/aggregate_live_results.py`.
-An actual person or a different model family must complete the three judgement
-verdicts and record its identity before a combined judgement claim is made.
+The selected evidence cases were independently graded with
+`google/gemini-2.5-flash-lite` using the committed rubric: scripted passed 3/3,
+while v1 and v2 each passed 0/3 because the relevant live runs returned no
+evidence-bearing final reasons. The sidecar records source hashes, judge prompt
+hash, item verdicts, raw responses, tokens and provider cost.

@@ -20,7 +20,9 @@ errors, per-case rows, and the separate judgement queue.
 The frozen submission also includes the compatibility-named
 `artifacts/results.json`, the two raw GPT-5.4 descriptor runs under
 `artifacts/live_results/`, and report-ready JSON, CSV and Markdown aggregation
-under `artifacts/live_battery_summary.*`.
+under `artifacts/live_battery_summary.*`. Independent prose-evidence verdicts
+are stored separately in `artifacts/judgement_results.json` so the frozen raw
+runs remain immutable.
 
 To inspect one case and every tool call:
 

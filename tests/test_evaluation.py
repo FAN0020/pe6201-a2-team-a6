@@ -18,6 +18,8 @@ from harness import code_check, load_cases, load_key, run_set
 
 
 YUPEI_CASES = {"REF-640%d" % index for index in range(1, 9)}
+LIU_CASES = {"REF-680%d" % index for index in range(1, 7)}
+INTEGRATION_CASES = {"REF-6901"}
 
 
 class EvaluationHarnessTests(unittest.TestCase):
@@ -48,6 +50,13 @@ class EvaluationHarnessTests(unittest.TestCase):
     def test_scripted_backend_covers_every_current_problem_b_case(self):
         missing = set(load_cases("B")) - set(backends.SCRIPTS)
         self.assertEqual(missing, set())
+
+    def test_merged_set_meets_case_count_and_preserves_teammate_cases(self):
+        cases = set(load_cases("B"))
+        self.assertGreaterEqual(len(cases), 30)
+        self.assertLessEqual(len(cases), 50)
+        self.assertTrue(LIU_CASES.issubset(cases))
+        self.assertTrue(INTEGRATION_CASES.issubset(cases))
 
     def test_full_set_uses_one_and_three_trial_policy(self):
         results, judgement_queue = run_set(problem="B")

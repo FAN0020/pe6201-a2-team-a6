@@ -87,7 +87,8 @@ def build_manifest(freeze_sha):
         "freeze": {
             "commit_sha": resolved,
             "source_head_sha": head,
-            "branch": _git("branch", "--show-current"),
+            "checkout_state": _git("branch", "--show-current") or "detached",
+            "intended_branch": "feature/evaluation",
             "main_base_sha": _git("merge-base", "origin/main", resolved),
             "working_tree_clean_before_generation": status == "",
         },

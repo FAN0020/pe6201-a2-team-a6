@@ -76,10 +76,9 @@ def run_case(case_id, problem=None, approve=None, verbose=False,
     stopped_by = None
     backend_error = None
 
-    # On the scripted backend the gate auto-approves so the run stays
-    # deterministic. The RECORD still shows the gate was reached and
-    # passed, which is what a marker looks for.
-    if approve is None:
+    # Only the scripted backend auto-approves, keeping offline evaluation
+    # deterministic. A live run in confirm mode needs an explicit callback.
+    if approve is None and backend.name == "scripted":
         approve = lambda action, payload: True
 
     try:
@@ -120,6 +119,9 @@ def run_case(case_id, problem=None, approve=None, verbose=False,
             # ---- conclude -------------------------------------------
             if "final" in move:
                 record = dict(move["final"])
+                if problem == "B" and record.get("decision") == "book":
+                    guards.check_booking_record(
+                        case_id, record.get("booked"), tool_trace)
                 break
 
             # ---- act: one turn may carry SEVERAL calls ---------------
@@ -137,6 +139,9 @@ def run_case(case_id, problem=None, approve=None, verbose=False,
 
                 # THE GATE goes in front of the irreversible step only.
                 if name == tools.GATED_ACTION.get(problem):
+                    if problem == "B":
+                        guards.check_booking_preconditions(
+                            case_id, args, tools.validate_booking_slot)
                     if not guards.gate(name, args, approve):
                         raise GuardrailStop(
                             "gate_held",

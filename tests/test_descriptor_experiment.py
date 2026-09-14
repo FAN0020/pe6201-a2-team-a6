@@ -41,6 +41,10 @@ class DescriptorExperimentTests(unittest.TestCase):
         self.assertIn("Returns an empty list when no slot is found", v1)
         self.assertIn("no_slot_in_window", v2)
         self.assertIn("Never widen the window", v2)
+        for text in (v1, v2):
+            self.assertIn("red_flag_term", text)
+            self.assertIn("duplicate_future_appointment", text)
+            self.assertIn("instruction_in_referral_free_text", text)
 
     def test_live_parser_accepts_one_move_and_rejects_a_trajectory(self):
         move = _parse_move(

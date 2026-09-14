@@ -30,6 +30,7 @@ MODEL = "openai/gpt-4o-mini"  # only used when BACKEND == "live"
 BASE_URL = "https://openrouter.ai/api/v1"
 DESCRIPTOR_VERSION = "v2"     # controlled D2(b) variable: "v1" | "v2"
 MAX_OUTPUT_TOKENS = 1200       # per live response; bounds malformed/runaway output
+RUNTIME_OVERRIDE = False       # CLI sets this when values intentionally differ
 
 # Your key never goes in this file. Put it in the environment:
 #     export OPENROUTER_API_KEY="sk-or-..."
@@ -117,6 +118,8 @@ def _stale_bytecode_warning():
     The fix is `rm -rf __pycache__`, or in a notebook, restart the kernel.
     """
     import re
+    if RUNTIME_OVERRIDE:
+        return ""
     try:
         src = open(os.path.join(HERE, "config.py"), encoding="utf-8").read()
     except OSError:

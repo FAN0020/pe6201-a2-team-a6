@@ -93,7 +93,12 @@ Only if all four pass do you query a slot.""",
 
 _HOW_TO_ANSWER = """
 HOW TO ANSWER
-Reply with JSON and nothing else. Two shapes only:
+Reply with EXACTLY ONE JSON object and nothing else. One response is one move.
+Never predict a tool result, continue past a tool call, or emit a whole planned
+trajectory. After returning a `calls` object, STOP; the system will execute the
+calls and send their observations back before you choose the next move.
+
+Two shapes only:
 
   to call tools (several at once ONLY if they do not depend on each other):
     {"thought": "...", "calls": [["tool_name", {"arg": "value"}], ...]}

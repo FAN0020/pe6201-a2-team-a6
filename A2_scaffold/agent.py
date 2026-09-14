@@ -236,6 +236,10 @@ def run_case(case_id, problem=None, approve=None, verbose=False,
         "backend": backend.name,
         # Preserve each live response's API-reported token counts for audit.
         "model_usage": getattr(backend, "usage_trace", []),
+        "model_response_trace": getattr(backend, "response_trace", []),
+        "provider_reported_cost_usd": round(sum(
+            entry.get("provider_cost_usd", 0.0)
+            for entry in getattr(backend, "usage_trace", [])), 8),
         # Make the token source explicit so estimates are never reported as
         # measurements in the evaluation or cost analysis.
         "token_measurement": (

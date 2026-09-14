@@ -217,6 +217,7 @@ def main(argv=None):
 
     config.BACKEND = args.backend
     config.DESCRIPTOR_VERSION = args.descriptor_version
+    config.RUNTIME_OVERRIDE = True
     if args.model:
         config.MODEL = args.model
     if args.backend == "live":

@@ -12,6 +12,7 @@ if SCAFFOLD not in sys.path:
 
 import prompt
 import tools
+from backends import LiveResponseError, _parse_move
 
 
 class DescriptorExperimentTests(unittest.TestCase):
@@ -40,6 +41,13 @@ class DescriptorExperimentTests(unittest.TestCase):
         self.assertIn("Returns an empty list when no slot is found", v1)
         self.assertIn("no_slot_in_window", v2)
         self.assertIn("Never widen the window", v2)
+
+    def test_live_parser_accepts_one_move_and_rejects_a_trajectory(self):
+        move = _parse_move(
+            '{"calls":[["get_referral",{"referral_id":"REF-5590"}]]}')
+        self.assertEqual(move["calls"][0][0], "get_referral")
+        with self.assertRaises(LiveResponseError):
+            _parse_move('{"calls": []}\n{"final": {}}')
 
 
 if __name__ == "__main__":

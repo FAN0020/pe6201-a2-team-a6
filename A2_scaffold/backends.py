@@ -277,6 +277,7 @@ class LiveBackend:
         self.usage_available = False
         # Step 2: Preserve per-response usage for later cost auditing.
         self.usage_trace = []
+        self.response_trace = []
 
     def next_move(self, transcript):
         # A failed request must not reuse usage from the preceding response.
@@ -314,7 +315,12 @@ class LiveBackend:
             "total_tokens": total_tokens,
         }
         self.usage_available = True
-        self.usage_trace.append(dict(self.last_usage))
+        usage_entry = dict(self.last_usage)
+        if isinstance(usage.get("cost"), (int, float)):
+            usage_entry["provider_cost_usd"] = float(usage["cost"])
+        if isinstance(usage.get("cost_details"), dict):
+            usage_entry["provider_cost_details"] = usage["cost_details"]
+        self.usage_trace.append(usage_entry)
 
         # Step 5: Parse only the assistant content after usage is recorded.
         try:
@@ -325,6 +331,7 @@ class LiveBackend:
             ) from exc
         if not isinstance(raw, str) or not raw.strip():
             raise LiveResponseError("live API returned empty assistant content")
+        self.response_trace.append(raw)
         return _parse_move(raw)
 
     def token_estimate(self, transcript):

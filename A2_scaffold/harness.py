@@ -234,6 +234,9 @@ def report(results):
     passed = sum(1 for r in results if r["passed"])
     turns = [r["record"].get("turns", 0) for r in results]
     cost = sum(r["record"].get("cost_usd", 0.0) for r in results)
+    provider_cost = sum(
+        r["record"].get("provider_reported_cost_usd", 0.0)
+        for r in results)
     negative = [r for r in results if r.get("negative")]
     negative_passed = sum(1 for r in negative if r["passed"])
     tokens_in = sum(r["record"].get("tokens_in", 0) for r in results)
@@ -270,6 +273,8 @@ def report(results):
     print("  error trials        %d" % error_trials)
     print("  total cost          US$%.4f   (%s backend)"
           % (cost, results[0]["record"]["backend"] if results else "-"))
+    if provider_cost:
+        print("  provider cost       US$%.4f   (API-reported)" % provider_cost)
     print()
 
     failures = [r for r in results if not r["passed"]]
@@ -308,7 +313,8 @@ def report(results):
                 1 for r in results
                 if r["record"].get("stopped_by") == "step_cap"),
             "tokens_in": tokens_in, "tokens_out": tokens_out,
-            "error_trials": error_trials, "cost_usd": cost}
+            "error_trials": error_trials, "cost_usd": cost,
+            "provider_reported_cost_usd": provider_cost}
 
 
 def summarise_cases(results):
@@ -338,6 +344,9 @@ def summarise_cases(results):
                               for record in records),
             "cost_usd": round(sum(record.get("cost_usd", 0.0)
                                   for record in records), 6),
+            "provider_reported_cost_usd": round(sum(
+                record.get("provider_reported_cost_usd", 0.0)
+                for record in records), 8),
             "errors": sum(1 for record in records
                           if record.get("backend_error")
                           or record.get("stopped_by") in

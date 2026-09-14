@@ -11,6 +11,7 @@
 | Liu's branch adds four negatives to the ten shipped negatives | Integrated set has 14 negatives, above the recommended 6-10 | Preserved teammate work and report the deviation transparently; do not silently drop labelled cases |
 | Timeline assigns Fan Yupei descriptor v1 while the declaration assigns a unique GPT-5.4 model | A same-model v1/v2 causal comparison cannot be completed by the v1 run alone | Freeze a descriptor-only change and request/produce a same-SHA GPT-5.4 v2 companion result before claiming a paired effect |
 | REF-5590 source materials disagree on whether a slot query belongs in the red-flag trace | Could create an unresolvable trace assertion | Follow the routing rule's early-exit requirement: red flag stops before slot search; retain Wang Chenyu's data issue log as disclosure |
+| Initial GPT-5.4 smoke response emitted three JSON moves in one response | The strict parser correctly rejected it, but a full run would fail before any tool execution | Strengthened the fixed system prompt to require exactly one move and an observation before the next; retained strict parsing and added the raw response trace for auditable failures |
 
 Scripted token and cost values are instrumentation estimates, not model
 measurements. Live results use only API-reported token counts and explicitly

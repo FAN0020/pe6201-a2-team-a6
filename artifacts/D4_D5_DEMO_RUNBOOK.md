@@ -24,7 +24,8 @@ booking occurs.
 ## 3. Reproduce the complete scripted run
 
 ```bash
-python3 A2_scaffold/run_eval.py --freeze-sha COMMIT_SHA
+python3 A2_scaffold/run_eval.py \
+  --freeze-sha e36bb1b2fcad625ed944e7df863165d95c0ef53f
 ```
 
 Show 30 cases, 58 trials, the negative-only line, turns, errors and the separate
@@ -40,3 +41,16 @@ python3 A2_scaffold/run_eval.py --prompt --descriptor-version v2
 Diff the prompts and show that only `get_clinic_slots` changes. Then open the
 freeze manifest and live result; identify the matching SHA, model, descriptor,
 API-reported tokens, price provenance and error count.
+
+## 5. Present the measured result and defect
+
+Open `artifacts/live_battery_summary.md`. State the denominators first: v1
+passed 20/58 (34.5%) and v2 passed 25/58 (43.1%); negative-only results were
+20/42 and 21/42. Median turns stayed at 2.0, while v2 used 53,834 more tokens
+and cost US$0.150148 more.
+
+Then show one failed raw trace from the result JSON without changing or
+retrying it. The dominant failure was protocol adherence: the model returned
+plain prose or concatenated JSON, so the strict parser stopped safely. Close by
+noting that the other four declared v2 model files are required before the team
+can claim a complete multi-family battery.

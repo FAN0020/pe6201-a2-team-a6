@@ -18,20 +18,61 @@ def _load(path):
         return json.load(handle)
 
 
-def _row(path, payload, expected_freeze, expected_cases):
+def _row(path, payload, manifest):
     run = payload.get("run", {})
     evaluation = payload.get("evaluation_set", {})
     summary = payload.get("summary", {})
+    expected_freeze = manifest["freeze"]["commit_sha"]
+    expected_set = manifest["evaluation_set"]
+    expected_cases = expected_set["case_ids"]
     case_ids = evaluation.get("case_ids", [])
     issues = []
     if run.get("backend") != "live":
         issues.append("backend is not live")
     if run.get("freeze_commit_sha") != expected_freeze:
         issues.append("freeze SHA mismatch")
+    if run.get("source_commit_sha") != expected_freeze:
+        issues.append("source SHA mismatch")
+    if run.get("working_tree_clean_before_run") is not True:
+        issues.append("source tree was not clean")
     if case_ids != expected_cases:
         issues.append("evaluation case list mismatch")
+    if evaluation.get("case_count") != expected_set["case_count"]:
+        issues.append("case count mismatch")
+    if (evaluation.get("negative_case_count") !=
+            expected_set["negative_case_count"]):
+        issues.append("negative-case count mismatch")
+    if summary.get("trials") != expected_set["total_trials"]:
+        issues.append("trial count mismatch")
     if run.get("token_measurement") != "api_reported":
         issues.append("tokens are not API-reported")
+    if run.get("prompt_version") != "v2":
+        issues.append("prompt version is not v2")
+    descriptor_version = run.get("descriptor_version")
+    expected_versions = manifest["controlled_descriptor_experiment"]["versions"]
+    expected_descriptor = expected_versions.get(descriptor_version)
+    if expected_descriptor is None:
+        issues.append("descriptor version is not frozen")
+    else:
+        if run.get("prompt_sha256") != expected_descriptor["prompt_sha256"]:
+            issues.append("prompt hash mismatch")
+        if (run.get("descriptor_bundle_sha256") !=
+                expected_descriptor["descriptor_bundle_sha256"]):
+            issues.append("descriptor hash mismatch")
+    if run.get("trial_policy") != {
+            "ordinary": expected_set["ordinary_trials_per_case"],
+            "negative": expected_set["negative_trials_per_case"],
+            "negative_definition": "expected decision is not book",
+    }:
+        issues.append("trial policy mismatch")
+    if (run.get("fixture_booking_approval") !=
+            "explicit_blanket_approval_for_local_simulation"):
+        issues.append("fixture booking approval missing")
+    pricing = run.get("pricing") or {}
+    if any(pricing.get(field) is None for field in (
+            "input_usd_per_million", "output_usd_per_million",
+            "source", "checked_on")):
+        issues.append("price provenance incomplete")
     return {
         "file": path.name,
         "model": run.get("model_id"),
@@ -51,6 +92,8 @@ def _row(path, payload, expected_freeze, expected_cases):
         "tokens_in": summary.get("tokens_in"),
         "tokens_out": summary.get("tokens_out"),
         "cost_usd": summary.get("cost_usd"),
+        "provider_reported_cost_usd":
+            summary.get("provider_reported_cost_usd"),
         "error_trials": summary.get("error_trials"),
         "judgement_pending": summary.get("judgement_pending"),
         "compatible": not issues,
@@ -140,9 +183,8 @@ def main():
     input_dir = ROOT / args.input_dir
     manifest = _load(ROOT / args.freeze_manifest)
     expected_freeze = manifest["freeze"]["commit_sha"]
-    expected_cases = manifest["evaluation_set"]["case_ids"]
     paths = sorted(input_dir.glob("*.json")) if input_dir.exists() else []
-    rows = [_row(path, _load(path), expected_freeze, expected_cases)
+    rows = [_row(path, _load(path), manifest)
             for path in paths]
     pairs = _paired([row for row in rows if row["compatible"]])
     payload = {

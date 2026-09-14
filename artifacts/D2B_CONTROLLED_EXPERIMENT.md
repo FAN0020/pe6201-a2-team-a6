@@ -45,3 +45,28 @@ python3 A2_scaffold/run_eval.py \
 ```
 
 Change only `--descriptor-version v1` to `v2` for the paired comparison.
+
+## Frozen result
+
+Both arms ran from clean detached checkouts of
+`e36bb1b2fcad625ed944e7df863165d95c0ef53f`. The same model, evaluation
+cases, trial policy, prompt rules, callable implementation, price inputs and
+response cap were used.
+
+| Measure | v1 | v2 | v2 minus v1 |
+|---|---:|---:|---:|
+| Code pass | 20/58 (34.5%) | 25/58 (43.1%) | +5 trials; +8.6 pp |
+| Negative code pass | 20/42 (47.6%) | 21/42 (50.0%) | +1 trial; +2.4 pp |
+| Median turns | 2.0 | 2.0 | 0.0 |
+| Worst-case turns | 3 | 5 | +2 |
+| API tokens, input/output | 234,496 / 9,653 | 287,085 / 10,898 | +53,834 total |
+| Provider-reported cost | US$0.731035 | US$0.881183 | +US$0.150148 |
+| Response-error trials | 28 | 22 | -6 |
+
+At trial level, six v1 failures became v2 passes, one v1 pass became a v2
+failure, 19 passed in both arms and 32 failed in both. This is evidence that the
+v2 descriptor was associated with a better result on this run, not proof that
+the descriptor alone guarantees an 8.6-point improvement: the live endpoint
+does not expose a reproducible sampling seed and there is only one frozen
+battery per arm. The v2 prompt was 654 characters longer, used 22.0% more API
+tokens across the battery and cost 20.5% more.

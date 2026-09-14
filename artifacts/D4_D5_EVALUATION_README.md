@@ -64,6 +64,13 @@ explicitly labelled and must not be reported as live measurements.
 The code pass rate is not relabelled as a combined pass rate while any judgement
 verdict remains pending.
 
+`artifacts/results.json` is the same frozen scripted evidence under the generic
+filename requested by the brief. The raw paid measurements are separate under
+`artifacts/live_results/`; `analysis/aggregate_live_results.py` rejects a row
+unless the freeze/source SHA, clean-tree flag, exact case list and counts,
+trial policy, prompt/descriptor hashes, API token source, approval record and
+price provenance all match the manifest.
+
 ## Freeze and live-battery procedure
 
 1. Check out the frozen `feature/evaluation` SHA from
@@ -74,7 +81,7 @@ verdict remains pending.
    model id or the controlled descriptor version may differ.
 4. Four members of this five-person team run the final v2 prompt on four model
    families spanning at least two price tiers. The fifth job is the controlled
-   v1 descriptor pass on the same model used by one v2 runner.
+   v1 descriptor pass on the same model used by one v2 result.
 5. Each runner uses an explicit model id and output filename:
 
    ```bash
@@ -92,8 +99,9 @@ verdict remains pending.
      --output artifacts/live_results/MEMBER_MODEL_v1.json
    ```
 
-6. Commit each result JSON without changing source files, then aggregate the
-   per-model and negative-only tables from those artifacts.
+6. Commit each result JSON without changing source files, then run
+   `python3 analysis/aggregate_live_results.py` to validate and aggregate the
+   per-model and negative-only tables.
 
 ## Controlled descriptor experiment
 
@@ -102,8 +110,22 @@ only v1/v2 variable is the text of the `get_clinic_slots` descriptor; the callab
 and every other frozen control remain identical. See
 `artifacts/D2B_CONTROLLED_EXPERIMENT.md`.
 
-The current timeline assigns member 4 the descriptor-v1 job, but a valid paired
-comparison still requires a v2 result from the same `openai/gpt-5.4` model and
-freeze SHA. The integrated team set also contains 14 negatives because Liu's
-four negative cases were preserved; this exceeds the brief's recommended 6-10
-range and should be reported rather than hidden.
+The timeline assigns member 4 the descriptor-v1 job. A matching GPT-5.4 v2
+control was also run from the same clean freeze, so the descriptor comparison is
+available now. The integrated team set contains 14 negatives because Liu's four
+negative cases were preserved; this exceeds the brief's recommended 6-10 range
+and is reported rather than hidden.
+
+## Frozen measurements currently available
+
+| Run | Overall code pass | Negative code pass | Median turns | API tokens in/out | Provider cost | Errors |
+|---|---:|---:|---:|---:|---:|---:|
+| Scripted v2 | 58/58 (100.0%) | 42/42 (100.0%) | 2.0 | estimates only | estimate only | 0 |
+| GPT-5.4 v1 descriptor | 20/58 (34.5%) | 20/42 (47.6%) | 2.0 | 234,496 / 9,653 | US$0.731035 | 28 |
+| GPT-5.4 v2 descriptor | 25/58 (43.1%) | 21/42 (50.0%) | 2.0 | 287,085 / 10,898 | US$0.881183 | 22 |
+
+The team-level D5 battery is not complete until the remaining declared v2
+model results are placed in `artifacts/live_results/` and pass the aggregator's
+compatibility checks. Judgement verdicts remain pending because the selected
+live cases did not produce evidence-bearing final reasons; do not invent a
+person or model in `graded_by`.

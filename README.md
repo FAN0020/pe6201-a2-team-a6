@@ -17,6 +17,11 @@ run once and negative cases run three times. It writes
 counts, code-check pass rates, negative-only results, turns, tokens, costs,
 errors, per-case rows, and the separate judgement queue.
 
+The frozen submission also includes the compatibility-named
+`artifacts/results.json`, the two raw GPT-5.4 descriptor runs under
+`artifacts/live_results/`, and report-ready JSON, CSV and Markdown aggregation
+under `artifacts/live_battery_summary.*`.
+
 To inspect one case and every tool call:
 
 ```bash
@@ -48,5 +53,7 @@ python3 A2_scaffold/run_eval.py \
 ```
 
 Do not run a live battery until the prompt, tool contract, evaluation set and
-freeze commit are agreed. See `artifacts/D4_D5_EVALUATION_README.md` for the
-handoff and result schema.
+freeze commit are agreed. This branch used freeze
+`e36bb1b2fcad625ed944e7df863165d95c0ef53f`. See
+`artifacts/D4_D5_EVALUATION_README.md` for the handoff, validation rules and
+result schema.

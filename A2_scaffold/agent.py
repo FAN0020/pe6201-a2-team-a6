@@ -54,8 +54,8 @@ def run_case(case_id, problem=None, approve=None, verbose=False,
     # The trailing optional parameter keeps existing run_case calls valid.
     backend = make_backend(
         case_id,
-        tool_descriptors=[tools.DESCRIPTORS[n] for n in tools.REGISTRY[problem]
-                          if n in tools.DESCRIPTORS],
+        tool_descriptors=prompt.descriptors_for(
+            problem, config.DESCRIPTOR_VERSION),
         system_prompt=prompt.build_system_prompt(problem),
         execution_mode=execution_mode)
 

@@ -172,7 +172,8 @@ def prepare_judgement_check(record, expected):
 # =====================================================================
 # RUNNING THE SET
 # =====================================================================
-def run_set(case_ids=None, problem=None, trials_for=None, verbose=False):
+def run_set(case_ids=None, problem=None, trials_for=None, verbose=False,
+            approve=None):
     """Run cases and grade them.
 
     `trials_for(case_id) -> int` decides how many trials each case gets.
@@ -196,7 +197,8 @@ def run_set(case_ids=None, problem=None, trials_for=None, verbose=False):
             continue
 
         for trial in range(1, trials_for(cid) + 1):
-            record = run_case(cid, problem=problem, verbose=verbose)
+            record = run_case(cid, problem=problem, verbose=verbose,
+                              approve=approve)
             passed, fails = code_check(record, expected)
             check_type = expected.get("check_type", "code")
             if check_type not in ("code", "code_and_judgement"):

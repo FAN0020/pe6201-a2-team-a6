@@ -9,6 +9,7 @@ command cannot spend credit on the scaffold's placeholder model.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -18,6 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import config
+import prompt
 from backends import SCRIPTS
 from harness import (load_cases, load_key, report, run_set,
                      summarise_cases)
@@ -34,12 +36,15 @@ def _parser():
     parser.add_argument("--all", action="store_true",
                         help="compatibility flag; the full set is already the default")
     parser.add_argument("--prompt", action="store_true",
-                        help="print the exact v2 system prompt and stop")
+                        help="print the exact selected system prompt and stop")
     parser.add_argument("--backend", choices=("scripted", "live"),
                         default="scripted")
     parser.add_argument("--model",
                         help="OpenRouter model id; required for a live run")
     parser.add_argument("--prompt-version", choices=("v2",), default="v2")
+    parser.add_argument("--descriptor-version", choices=("v1", "v2"),
+                        default="v2",
+                        help="controlled get_clinic_slots descriptor arm")
     parser.add_argument("--tool-version", default="main-tool-contract")
     parser.add_argument("--freeze-sha",
                         help="frozen source commit shared by all battery runners")
@@ -49,6 +54,16 @@ def _parser():
                         help="run and report without writing a result artifact")
     parser.add_argument("--verbose", action="store_true",
                         help="print every tool-calling turn for a full set")
+    parser.add_argument("--approve-fixture-bookings", action="store_true",
+                        help="approve simulated local fixture bookings in live mode")
+    parser.add_argument("--price-input-per-million", type=float,
+                        help="live model input price in USD per million tokens")
+    parser.add_argument("--price-output-per-million", type=float,
+                        help="live model output price in USD per million tokens")
+    parser.add_argument("--price-source",
+                        help="source URL or document for the live prices")
+    parser.add_argument("--price-date",
+                        help="date on which the live prices were checked")
     return parser
 
 
@@ -90,12 +105,25 @@ def _output_path(args):
     if args.backend == "scripted":
         return REPO_ROOT / "artifacts" / "results_scripted.json"
     return (REPO_ROOT / "artifacts" / "live_results" /
-            ("%s_%s.json" % (_safe_name(args.model), args.prompt_version)))
+            ("%s_%s_descriptor-%s.json" %
+             (_safe_name(args.model), args.prompt_version,
+              args.descriptor_version)))
+
+
+def _sha256_text(value):
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
 def _artifact(results, judgement_queue, summary, args, git_metadata):
     case_ids = load_cases()
     key = load_key()
+    system_prompt = prompt.build_system_prompt(
+        config.PROBLEM, args.descriptor_version)
+    descriptors = prompt.descriptors_for(
+        config.PROBLEM, args.descriptor_version)
+    descriptor_json = json.dumps(
+        descriptors, ensure_ascii=False, sort_keys=True,
+        separators=(",", ":"))
     negative_ids = [case_id for case_id in case_ids
                     if key[case_id].get("expected_decision") != "book"]
     return {
@@ -106,6 +134,10 @@ def _artifact(results, judgement_queue, summary, args, git_metadata):
             "backend": args.backend,
             "model_id": args.model if args.backend == "live" else None,
             "prompt_version": args.prompt_version,
+            "prompt_sha256": _sha256_text(system_prompt),
+            "descriptor_version": args.descriptor_version,
+            "descriptor_bundle_sha256": _sha256_text(descriptor_json),
+            "descriptor_experiment_tool": prompt.EXPERIMENT_TOOL,
             "tool_version": args.tool_version,
             "freeze_commit_sha": git_metadata["freeze_commit_sha"],
             "source_commit_sha": git_metadata["source_commit_sha"],
@@ -120,6 +152,16 @@ def _artifact(results, judgement_queue, summary, args, git_metadata):
                 "negative": 3,
                 "negative_definition": "expected decision is not book",
             },
+            "fixture_booking_approval": (
+                "explicit_blanket_approval_for_local_simulation"
+                if args.approve_fixture_bookings else "not_supplied"),
+            "pricing": {
+                "input_usd_per_million": config.PRICE_IN,
+                "output_usd_per_million": config.PRICE_OUT,
+                "source": args.price_source,
+                "checked_on": args.price_date,
+            },
+            "max_output_tokens_per_response": config.MAX_OUTPUT_TOKENS,
         },
         "evaluation_set": {
             "case_count": len(case_ids),
@@ -134,9 +176,10 @@ def _artifact(results, judgement_queue, summary, args, git_metadata):
     }
 
 
-def _run_one(case_id):
+def _run_one(case_id, approve=None):
     results, queue = run_set(
-        [case_id], trials_for=lambda _case_id: 1, verbose=True)
+        [case_id], trials_for=lambda _case_id: 1, verbose=True,
+        approve=approve)
     if not results:
         return 1
     result = results[0]
@@ -157,12 +200,28 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.backend == "live" and not args.model:
         parser.error("--model is required when --backend live")
+    if args.backend == "live" and not args.freeze_sha:
+        parser.error("--freeze-sha is required when --backend live")
     if args.backend == "scripted" and args.model:
         parser.error("--model is only valid when --backend live")
+    live_prices = (args.price_input_per_million,
+                   args.price_output_per_million)
+    if args.backend == "live" and any(value is None for value in live_prices):
+        parser.error("both live price arguments are required")
+    if args.backend == "live" and any(value < 0 for value in live_prices):
+        parser.error("live price arguments cannot be negative")
+    if (args.backend == "live" and config.AUTONOMY == "confirm"
+            and not args.approve_fixture_bookings):
+        parser.error(
+            "--approve-fixture-bookings is required for the local live battery")
 
     config.BACKEND = args.backend
+    config.DESCRIPTOR_VERSION = args.descriptor_version
     if args.model:
         config.MODEL = args.model
+    if args.backend == "live":
+        config.PRICE_IN = args.price_input_per_million
+        config.PRICE_OUT = args.price_output_per_million
     if args.backend == "live" and not os.environ.get("OPENROUTER_API_KEY"):
         raise SystemExit(
             "OPENROUTER_API_KEY is required for live runs. "
@@ -172,13 +231,16 @@ def main(argv=None):
     print("data: %s" % config.data_root())
 
     if args.prompt:
-        import prompt
         print()
-        prompt.audit()
+        prompt.audit(descriptor_version=args.descriptor_version)
         return 0
 
+    approve = None
+    if args.approve_fixture_bookings:
+        approve = lambda _action, _payload: True
+
     if args.case_id:
-        return _run_one(args.case_id)
+        return _run_one(args.case_id, approve=approve)
 
     case_ids = load_cases()
     if args.backend == "scripted":
@@ -195,7 +257,8 @@ def main(argv=None):
     git_metadata = _git_metadata(args.freeze_sha)
     print("\n  Running all %d submitted cases (%s backend)."
           % (len(case_ids), args.backend))
-    results, judgement_queue = run_set(case_ids, verbose=args.verbose)
+    results, judgement_queue = run_set(
+        case_ids, verbose=args.verbose, approve=approve)
     summary = report(results)
 
     if args.no_write:
@@ -207,7 +270,11 @@ def main(argv=None):
     with output.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=2, ensure_ascii=False, default=str)
         handle.write("\n")
-    print("  Wrote %s" % output.relative_to(REPO_ROOT))
+    try:
+        display_path = output.relative_to(REPO_ROOT)
+    except ValueError:
+        display_path = output
+    print("  Wrote %s" % display_path)
     print("  Code pass rates and judgement status are reported separately.")
     return 0 if summary["passed"] == summary["trials"] else 1
 

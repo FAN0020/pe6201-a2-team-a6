@@ -23,10 +23,11 @@ To inspect one case and every tool call:
 python3 A2_scaffold/run_eval.py REF-6401
 ```
 
-To inspect the exact prompt without spending credit:
+To inspect either controlled descriptor prompt without spending credit:
 
 ```bash
-python3 A2_scaffold/run_eval.py --prompt
+python3 A2_scaffold/run_eval.py --prompt --descriptor-version v1
+python3 A2_scaffold/run_eval.py --prompt --descriptor-version v2
 ```
 
 Live evaluation is opt-in and requires an explicit OpenRouter model id:
@@ -36,8 +37,14 @@ export OPENROUTER_API_KEY="..."
 python3 A2_scaffold/run_eval.py \
   --backend live \
   --model PROVIDER/MODEL \
+  --descriptor-version v1 \
+  --approve-fixture-bookings \
+  --price-input-per-million PRICE \
+  --price-output-per-million PRICE \
+  --price-source SOURCE \
+  --price-date YYYY-MM-DD \
   --freeze-sha COMMIT_SHA \
-  --output artifacts/live_results/MEMBER_MODEL_v2.json
+  --output artifacts/live_results/MEMBER_MODEL_v1.json
 ```
 
 Do not run a live battery until the prompt, tool contract, evaluation set and

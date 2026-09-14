@@ -460,12 +460,123 @@ EXTRA_SPECIALTIES = []     # {"code", "name", "mandatory_tests": [{"code","name"
                            #  "red_flag_terms": [...], "treats": [...]}
 EXTRA_CLINIC_SLOTS = []    # {"clinic", "specialty", "band", "date", "time",
                            #  "capacity_remaining"}
-EXTRA_PATIENTS = []        # {"patient_id", "date_of_birth",
-                           #  "existing_appointments": [{"specialty","clinic","date"}]}
-EXTRA_CONTACTS = []        # {"patient_id", "method", "value"}
-EXTRA_REFERRALS = []       # {"referral_id", "patient_id", "referring_clinic",
-                           #  "specialty", "date_received", "clinical_summary",
-                           #  "tests_attached", "tests_attached_on"}
+
+# Fan Yupei's eight D4 cases deliberately use the shipped specialties and slots.
+# The shipped answer key already contains ten negative cases, so these additions
+# broaden the ordinary booking paths without pushing the set beyond the brief's
+# recommended 6-10 negative-case range.
+EXTRA_PATIENTS = [
+    {"patient_id": "P-2401", "date_of_birth": "1978-02-11",
+     "existing_appointments": []},
+    {"patient_id": "P-2402", "date_of_birth": "1985-06-23",
+     "existing_appointments": []},
+    {"patient_id": "P-2403", "date_of_birth": "1991-10-04",
+     "existing_appointments": []},
+    {"patient_id": "P-2404", "date_of_birth": "1972-12-18",
+     "existing_appointments": []},
+    {"patient_id": "P-2405", "date_of_birth": "1964-04-30",
+     "existing_appointments": []},
+    {"patient_id": "P-2406", "date_of_birth": "1988-08-09",
+     "existing_appointments": []},
+    {"patient_id": "P-2407", "date_of_birth": "1959-01-27",
+     "existing_appointments": []},
+    {"patient_id": "P-2408", "date_of_birth": "1996-11-15",
+     "existing_appointments": []},
+]
+
+EXTRA_CONTACTS = [
+    {"patient_id": "P-2401", "method": "sms", "value": "+65 8xxx 2401"},
+    {"patient_id": "P-2402", "method": "phone", "value": "+65 6xxx 2402"},
+    {"patient_id": "P-2403", "method": "sms", "value": "+65 8xxx 2403"},
+    {"patient_id": "P-2404", "method": "email", "value": "patient2404@example.invalid"},
+    {"patient_id": "P-2405", "method": "phone", "value": "+65 6xxx 2405"},
+    {"patient_id": "P-2406", "method": "sms", "value": "+65 8xxx 2406"},
+    {"patient_id": "P-2407", "method": "phone", "value": "+65 6xxx 2407"},
+    {"patient_id": "P-2408", "method": "email", "value": "patient2408@example.invalid"},
+]
+
+EXTRA_REFERRALS = [
+    {
+        "referral_id": "REF-6401",
+        "patient_id": "P-2401",
+        "referring_clinic": "Queenstown Polyclinic",
+        "specialty": "OPH",
+        "date_received": "2026-09-09",
+        "clinical_summary": "Right-eye vision has been worsening over days. Query retinal review.",
+        "tests_attached": ["VF-01"],
+        "tests_attached_on": "2026-09-08",
+    },
+    {
+        "referral_id": "REF-6402",
+        "patient_id": "P-2402",
+        "referring_clinic": "Hougang Polyclinic",
+        "specialty": "CARD",
+        "date_received": "2026-09-09",
+        "clinical_summary": "Recurrent palpitations over three weeks without symptoms at rest.",
+        "tests_attached": ["ECG-12", "BNP-01"],
+        "tests_attached_on": "2026-09-07",
+    },
+    {
+        "referral_id": "REF-6403",
+        "patient_id": "P-2403",
+        "referring_clinic": "Geylang Polyclinic",
+        "specialty": "ORT",
+        "date_received": "2026-09-09",
+        "clinical_summary": "Left knee pain not responding to treatment and limiting stairs.",
+        "tests_attached": ["XR-KNEE"],
+        "tests_attached_on": "2026-09-06",
+    },
+    {
+        "referral_id": "REF-6404",
+        "patient_id": "P-2404",
+        "referring_clinic": "Pioneer Polyclinic",
+        "specialty": "DER",
+        "date_received": "2026-09-09",
+        "clinical_summary": "Recurrent eczema on both hands despite regular emollients.",
+        "tests_attached": [],
+    },
+    {
+        "referral_id": "REF-6405",
+        "patient_id": "P-2405",
+        "referring_clinic": "Marine Parade Polyclinic",
+        "specialty": "ENT",
+        "date_received": "2026-09-09",
+        "clinical_summary": "Stable gradual hearing reduction in the left ear for two years.",
+        "tests_attached": ["AUD-01", "NASO-02"],
+        "tests_attached_on": "2026-09-04",
+    },
+    {
+        "referral_id": "REF-6406",
+        "patient_id": "P-2406",
+        "referring_clinic": "Bukit Panjang Polyclinic",
+        "specialty": "ORT",
+        "date_received": "2026-09-09",
+        "clinical_summary": "Chronic stable right shoulder pain for nine months.",
+        "tests_attached": ["XR-KNEE"],
+        "tests_attached_on": "2026-09-01",
+    },
+    {
+        "referral_id": "REF-6407",
+        "patient_id": "P-2407",
+        "referring_clinic": "Toa Payoh Polyclinic",
+        "specialty": "CARD",
+        "date_received": "2026-09-09",
+        "clinical_summary": "Stable cardiac murmur found during a routine health review.",
+        "tests_attached": ["ECG-12", "BNP-01"],
+        "tests_attached_on": "2026-09-05",
+    },
+    {
+        "referral_id": "REF-6408",
+        "patient_id": "P-2408",
+        "referring_clinic": "Ang Mo Kio Polyclinic",
+        "specialty": "DER",
+        "date_received": "2026-09-09",
+        "clinical_summary": "Stable plaque psoriasis on both elbows for six months.",
+        "tests_attached": [],
+    },
+]       # {"referral_id", "patient_id", "referring_clinic",
+        #  "specialty", "date_received", "clinical_summary",
+        #  "tests_attached", "tests_attached_on"}
 
 
 def write():

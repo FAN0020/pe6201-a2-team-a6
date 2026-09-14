@@ -154,6 +154,16 @@ SCRIPTS = {
     ],
 }
 
+# D5(a) must cover the whole submitted evaluation set, not only the one
+# worked example above.  The scenario builder derives deterministic replays
+# from fixture records and the fixed routing order without reading the answer
+# key.  Keep the explicit worked examples when ids overlap because their exact
+# grouped-call traces are also D2(c) evidence.
+from evaluation_scripts import build_problem_b_scripts
+
+for _case_id, _steps in build_problem_b_scripts().items():
+    SCRIPTS.setdefault(_case_id, _steps)
+
 
 def build_script_steps(case_id, execution_mode="grouped"):
     """Build an independent action sequence for one scripted run."""

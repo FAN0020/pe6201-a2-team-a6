@@ -34,6 +34,7 @@ import statistics
 
 import config
 from agent import run_case
+from guardrails import Guardrails
 
 
 # =====================================================================
@@ -71,10 +72,10 @@ def load_cases(problem=None):
 def code_check(record, expected):
     """Deterministic comparison. Returns (passed, [reasons it failed]).
 
-    Note what is compared and what is NOT. The DECISION and its single
-    TRIGGER are compared. The wording is not, the turn count is not, the
-    cost is not - two agents can both be right and cost very different
-    amounts, which is the subject of D6.
+    The decision, single trigger and exact booked slot are compared. A
+    booking also needs a matching successful gated action in the tool trace;
+    a model's final JSON alone is not proof of execution. The wording, turn
+    count and cost are not compared.
     """
     fails = []
 
@@ -97,6 +98,10 @@ def code_check(record, expected):
             if got.get(field) != expected["booked"][field]:
                 fails.append("booked.%s %r, expected %r"
                              % (field, got.get(field), expected["booked"][field]))
+        if not Guardrails.booking_confirmed(
+                record.get("case_id"), got, record.get("tool_trace") or [],
+                record.get("guardrails_fired") or []):
+            fails.append("no matching approved book_slot result in tool trace")
 
     return (not fails), fails
 

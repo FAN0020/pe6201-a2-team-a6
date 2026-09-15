@@ -78,5 +78,3 @@ checks pass 58/58, and both live result rows are reported compatible.
 4. Merge `feature/evaluation` only after review. Do not replace the raw result
    files, change labels after seeing results, or merge directly into `main`
    without the team's normal PR process.
-
-No API key or credential is stored anywhere in this repository.

@@ -3,6 +3,7 @@
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 
 SCAFFOLD = os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
@@ -10,9 +11,10 @@ SCAFFOLD = os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 if SCAFFOLD not in sys.path:
     sys.path.insert(0, SCAFFOLD)
 
+import backends
 import prompt
 import tools
-from backends import LiveResponseError, _parse_move
+from backends import LiveBackend, LiveResponseError, _parse_move
 
 
 class DescriptorExperimentTests(unittest.TestCase):
@@ -52,6 +54,32 @@ class DescriptorExperimentTests(unittest.TestCase):
         self.assertEqual(move["calls"][0][0], "get_referral")
         with self.assertRaises(LiveResponseError):
             _parse_move('{"calls": []}\n{"final": {}}')
+
+    def test_live_backend_records_requested_and_returned_model_ids(self):
+        payload = {
+            "model": "openai/gpt-5.4-2026-09-01",
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 20,
+                "total_tokens": 120,
+            },
+            "choices": [{"message": {"content": (
+                '{"final":{"decision":"escalate","reason":"test"}}'
+            )}}],
+        }
+        previous_model = backends.config.MODEL
+        backends.config.MODEL = "openai/gpt-5.4"
+        try:
+            backend = LiveBackend("REF-5590", [], "system")
+            with patch.object(backends, "_live_call", return_value=payload):
+                backend.next_move([])
+        finally:
+            backends.config.MODEL = previous_model
+
+        self.assertEqual(backend.model_identity_trace, [{
+            "requested_model_id": "openai/gpt-5.4",
+            "provider_returned_model_id": "openai/gpt-5.4-2026-09-01",
+        }])
 
 
 if __name__ == "__main__":

@@ -66,6 +66,14 @@ The raw result keeps judgement fields null so the measured run is immutable;
 completed verdicts live in `artifacts/judgement_results.json` and remain a
 separate measure from code pass rate.
 
+The D6-facing file `handoff/fan_yupei/results.json` is generated from the
+canonical raw v2 result. It preserves the raw fields and adds a derived summary
+and one flattened audit row per trial. For this handoff, `fallback_used` means a
+trial failed the deterministic code check and therefore requires human fallback
+under D6's escalation-on-failure convention. It is not a provider field or a
+separate tool call. Regenerate or validate it with
+`analysis/build_fan_yupei_live_handoff.py`.
+
 `artifacts/results.json` is the same frozen scripted evidence under the generic
 filename requested by the brief. The raw paid measurements are separate under
 `artifacts/live_results/`; `analysis/aggregate_live_results.py` rejects a row

@@ -24,6 +24,15 @@ under `artifacts/live_battery_summary.*`. Independent prose-evidence verdicts
 are stored separately in `artifacts/judgement_results.json` so the frozen raw
 runs remain immutable.
 
+Fan Yupei's final live-model handoff for the D6 owner is documented in
+`docs/fan_yupei_live_model_handoff.md`. Its machine-readable
+`handoff/fan_yupei/results.json` is generated from the immutable raw v2 result
+and adds trial-derived fallback fields plus a flattened per-trial audit view:
+
+```bash
+python3 analysis/build_fan_yupei_live_handoff.py --check
+```
+
 To inspect one case and every tool call:
 
 ```bash

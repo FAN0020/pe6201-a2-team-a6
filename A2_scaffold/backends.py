@@ -271,6 +271,13 @@ class LiveBackend:
         self.case_id = case_id
         self.tools = tool_descriptors
         self.system_prompt = system_prompt
+        # Preserve both sides of model identity.  ``requested_model_id`` is
+        # the exact OpenRouter route configured for the run; the response
+        # trace records the provider-returned model id when the endpoint
+        # supplies one.  Keeping both avoids silently treating a requested
+        # alias as proof of the provider-resolved model.
+        self.requested_model_id = config.MODEL
+        self.model_identity_trace = []
         # Step 1: Keep the latest API-reported usage for the agent loop.
         self.last_usage = {"prompt_tokens": 0, "completion_tokens": 0,
                            "total_tokens": 0}
@@ -297,6 +304,13 @@ class LiveBackend:
         # Step 4: Require measured usage instead of silently recording zeros.
         if not isinstance(payload, dict):
             raise LiveResponseError("live API response was not a JSON object")
+        returned_model_id = payload.get("model")
+        if not isinstance(returned_model_id, str) or not returned_model_id.strip():
+            returned_model_id = None
+        self.model_identity_trace.append({
+            "requested_model_id": self.requested_model_id,
+            "provider_returned_model_id": returned_model_id,
+        })
         usage = payload.get("usage") or {}
         if "prompt_tokens" not in usage or "completion_tokens" not in usage:
             raise LiveResponseError("live API response did not include token usage")

@@ -234,6 +234,12 @@ def run_case(case_id, problem=None, approve=None, verbose=False,
         "stopped_by": stopped_by,
         "backend_error": backend_error,
         "backend": backend.name,
+        # The requested route is always available for a live run.  New runs
+        # also retain the model id returned by every provider response, when
+        # present.  Historical frozen artifacts remain immutable and may not
+        # contain the response-side field.
+        "requested_model_id": getattr(backend, "requested_model_id", None),
+        "model_identity_trace": getattr(backend, "model_identity_trace", []),
         # Preserve each live response's API-reported token counts for audit.
         "model_usage": getattr(backend, "usage_trace", []),
         "model_response_trace": getattr(backend, "response_trace", []),

@@ -42,20 +42,21 @@ escalation-on-failure convention, those 33 trials require human fallback:
 fallback count 33 and fallback rate 33/58 = 56.8965517241%. This is explicitly
 derived from the deterministic code result, not reported by the provider.
 
-## Files in this package
+## Files to use
 
-- `results.json`: generated D6-facing view of the final live GPT-5.4
-  prompt-v2/descriptor-v2 result. It preserves the raw result and adds a compact
-  summary plus 58 per-trial audit rows, including fallback flags and token use.
-- `results_descriptor_v1.json`: Fan Yupei's required descriptor-v1 result.
-- `judgement_results.json`: independent different-family judgement evidence.
-- `live_battery_summary.csv`: report-ready metrics for both compatible runs.
-- `live_cost_handoff.csv`: measured D6 inputs and price provenance.
-- `freeze_manifest.json`: exact freeze and reproduction metadata.
-- `SHA256SUMS`: integrity hashes for every packaged evidence file.
+- `artifacts/results.json`: school-required scripted D5(a) result.
+- `artifacts/live_results/fan_yupei_openai_gpt-5.4_v2.json`: final raw live
+  GPT-5.4 result.
+- `artifacts/live_results/fan_yupei_openai_gpt-5.4_v1.json`: controlled
+  descriptor-v1 baseline.
+- `artifacts/fan_yupei_live_handoff.json`: compact D6 summary and 58 per-trial
+  audit rows, including fallback flags and token use.
+- `artifacts/live_cost_handoff.csv`: measured D6 input row and price provenance.
+- `artifacts/freeze_manifest.json`: exact freeze and reproduction metadata.
+- `artifacts/judgement_results.json`: independent different-family judgement
+  evidence.
 
-The canonical originals remain under `artifacts/`. Do not edit the generated
-handoff result independently; rebuild it with
+Do not edit the generated handoff independently; rebuild it with
 `python3 analysis/build_fan_yupei_live_handoff.py`.
 
 ## Verification
@@ -68,7 +69,6 @@ python3 -m unittest discover -s tests -v
 python3 A2_scaffold/run_eval.py --no-write
 python3 analysis/aggregate_live_results.py
 python3 analysis/build_fan_yupei_live_handoff.py --check
-cd handoff/fan_yupei && shasum -a 256 -c SHA256SUMS
 ```
 
 Expected outcomes: fixture validation passes, 56 tests pass, scripted code

@@ -13,21 +13,33 @@ python3 A2_scaffold/run_eval.py
 
 The final command evaluates every submitted Problem B fixture. Ordinary cases
 run once and negative cases run three times. It writes
-`artifacts/results_scripted.json`, including the source commit, case and trial
+`artifacts/results.json`, including the source commit, case and trial
 counts, code-check pass rates, negative-only results, turns, tokens, costs,
 errors, per-case rows, and the separate judgement queue.
 
-The frozen submission also includes the compatibility-named
-`artifacts/results.json`, the two raw GPT-5.4 descriptor runs under
-`artifacts/live_results/`, and report-ready JSON, CSV and Markdown aggregation
-under `artifacts/live_battery_summary.*`. Independent prose-evidence verdicts
-are stored separately in `artifacts/judgement_results.json` so the frozen raw
-runs remain immutable.
+## Which result file to use
+
+| Purpose | File |
+| --- | --- |
+| School-required default scripted result, D5(a) | `artifacts/results.json` |
+| Fan Yupei final GPT-5.4 live result, D5(b) | `artifacts/live_results/fan_yupei_openai_gpt-5.4_v2.json` |
+| Controlled descriptor-v1 baseline, D2(b) | `artifacts/live_results/fan_yupei_openai_gpt-5.4_v1.json` |
+| Liu Xuanlin D6 input and per-trial fallback audit | `artifacts/fan_yupei_live_handoff.json` and `artifacts/live_cost_handoff.csv` |
+
+`artifacts/results.json` is now the only file named `results.json` in the
+repository. These files have different purposes and should not replace one
+another. The scripted token values are estimates; only the two live files
+contain measured API usage.
+
+Report-ready model aggregation is under `artifacts/live_battery_summary.*`.
+Independent prose-evidence verdicts are in
+`artifacts/judgement_results.json`, keeping the frozen raw runs immutable.
 
 Fan Yupei's final live-model handoff for the D6 owner is documented in
 `docs/fan_yupei_live_model_handoff.md`. Its machine-readable
-`handoff/fan_yupei/results.json` is generated from the immutable raw v2 result
-and adds trial-derived fallback fields plus a flattened per-trial audit view:
+`artifacts/fan_yupei_live_handoff.json` is generated from the immutable raw v2
+result and adds trial-derived fallback fields plus a flattened per-trial audit
+view:
 
 ```bash
 python3 analysis/build_fan_yupei_live_handoff.py --check

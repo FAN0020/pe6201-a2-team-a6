@@ -20,7 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_INPUTS = [
-    "artifacts/results_scripted.json",
+    "artifacts/results.json",
     "artifacts/live_results/fan_yupei_openai_gpt-5.4_v1.json",
     "artifacts/live_results/fan_yupei_openai_gpt-5.4_v2.json",
 ]

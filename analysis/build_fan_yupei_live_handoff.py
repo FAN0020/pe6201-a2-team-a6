@@ -9,7 +9,6 @@ creates an additive handoff view with flattened per-trial audit fields.
 from __future__ import annotations
 
 import argparse
-import copy
 import hashlib
 import json
 import math
@@ -21,7 +20,7 @@ DEFAULT_INPUT = (
     ROOT / "artifacts" / "live_results" /
     "fan_yupei_openai_gpt-5.4_v2.json"
 )
-DEFAULT_OUTPUT = ROOT / "handoff" / "fan_yupei" / "results.json"
+DEFAULT_OUTPUT = ROOT / "artifacts" / "fan_yupei_live_handoff.json"
 OWNER = "Fan Yupei"
 MODEL_LABEL = "OpenAI GPT-5.4"
 FALLBACK_DEFINITION = (
@@ -161,9 +160,7 @@ def derive_handoff(payload, source_path: Path):
             "model field"
         )
 
-    enriched = copy.deepcopy(payload)
-    enriched["handoff_schema_version"] = "1.0"
-    enriched["handoff_summary"] = {
+    handoff_summary = {
         "owner": OWNER,
         "model_label": MODEL_LABEL,
         "exact_model_id": model_id,
@@ -185,8 +182,17 @@ def derive_handoff(payload, source_path: Path):
         "source_result_path": str(source_path.relative_to(ROOT)),
         "source_result_sha256": _sha256(source_path),
     }
-    enriched["audit_trials"] = audit_trials
-    return enriched
+    return {
+        "handoff_schema_version": "1.0",
+        "source_result": {
+            "path": str(source_path.relative_to(ROOT)),
+            "sha256": _sha256(source_path),
+            "run": run,
+            "evaluation_set": payload.get("evaluation_set"),
+        },
+        "handoff_summary": handoff_summary,
+        "audit_trials": audit_trials,
+    }
 
 
 def _serialise(payload):

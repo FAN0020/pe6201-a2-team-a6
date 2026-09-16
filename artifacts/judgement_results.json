@@ -8,8 +8,8 @@
   "token_measurement": "api_reported",
   "results": [
     {
-      "source_file": "artifacts/results_scripted.json",
-      "source_file_sha256": "294ed1707c908d7cf7a5461989c34221eecbd0777f1c663edd8e20ad0b866f11",
+      "source_file": "artifacts/results.json",
+      "source_file_sha256": "2729b3e372615d31461cc4b97265e862ecea053b3bbe875df6e817d05ba35635",
       "source_backend": "scripted",
       "source_model": null,
       "descriptor_version": "v2",

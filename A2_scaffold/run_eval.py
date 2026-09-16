@@ -103,7 +103,10 @@ def _output_path(args):
         path = Path(args.output)
         return path if path.is_absolute() else REPO_ROOT / path
     if args.backend == "scripted":
-        return REPO_ROOT / "artifacts" / "results_scripted.json"
+        # The school brief asks for one committed results.json.  Keep that as
+        # the single default scripted artifact instead of creating a second
+        # compatibility copy with a different name.
+        return REPO_ROOT / "artifacts" / "results.json"
     return (REPO_ROOT / "artifacts" / "live_results" /
             ("%s_%s_descriptor-%s.json" %
              (_safe_name(args.model), args.prompt_version,

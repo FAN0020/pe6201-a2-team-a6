@@ -11,7 +11,7 @@ break-even analysis.
 | Model | OpenAI GPT-5.4 |
 | Exact model ID | `openai/gpt-5.4` |
 | Freeze/reproducible commit | `e36bb1b2fcad625ed944e7df863165d95c0ef53f` |
-| Results file | `handoff/fan_yupei/results.json` |
+| Results file | `artifacts/fan_yupei_live_handoff.json` |
 | Canonical raw result | `artifacts/live_results/fan_yupei_openai_gpt-5.4_v2.json` |
 | Total trials | 58 |
 | Successful trials | 25 |
@@ -71,9 +71,9 @@ Relevant configuration and code paths:
 
 ## Audit and fallback definition
 
-The canonical raw result is immutable. `handoff/fan_yupei/results.json` is a
-generated additive view: it retains the full raw result and adds
-`handoff_summary` plus 58 flattened `audit_trials`. Each audit row contains the
+The canonical raw result is immutable. `artifacts/fan_yupei_live_handoff.json`
+is a compact generated sidecar containing `handoff_summary`, the raw source
+path and hash, and 58 flattened `audit_trials`. Each audit row contains the
 case and trial IDs, exact requested model ID, success, failure reasons, derived
 fallback flag, API input/output/total tokens, latency, turns, stop reason, and
 backend error.
